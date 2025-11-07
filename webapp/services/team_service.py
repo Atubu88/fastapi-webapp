@@ -118,13 +118,13 @@ def _clear_team_from_caches(team: Dict[str, Any]) -> None:
             TEAM_PROGRESS_CACHE.pop(match_id, None)
 
 
-async def _find_existing_team_for_user(user: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Return the team the user already belongs to (if any)."""
+async def _find_existing_team_for_user(user_id: int) -> Optional[Dict[str, Any]]:
+    """Возвращает команду, в которой состоит пользователь (если есть)."""
 
-    # Проверяем наличие записи в таблице участников.
+    # Проверяем наличие записи в таблице участников
     membership = await _fetch_single_record(
         "team_members",
-        {"user_id": f"eq.{user['id']}"},
+        {"user_id": f"eq.{user_id}"},
         select="team_id",
     )
 
@@ -133,10 +133,8 @@ async def _find_existing_team_for_user(user: Dict[str, Any]) -> Optional[Dict[st
         if team:
             return team
 
-    # На случай, если запись участника отсутствует, но пользователь значится капитаном.
-    captain_team = await _fetch_single_record(
-        "teams", {"captain_id": f"eq.{user['id']}"}
-    )
+    # На случай, если пользователь является капитаном
+    captain_team = await _fetch_single_record("teams", {"captain_id": f"eq.{user_id}"})
     if captain_team:
         return captain_team
 

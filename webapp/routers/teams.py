@@ -504,7 +504,7 @@ async def me(request: Request) -> Dict[str, Any]:
 @router.get("/team/of-user/{user_id}")
 async def get_team_of_user(user_id: int):
     user = await _ensure_user_exists(user_id)
-    team = await _find_existing_team_for_user(user)
+    team = await _find_existing_team_for_user(user_id)
     if not team:
         return JSONResponse({}, status_code=404)
     return team
