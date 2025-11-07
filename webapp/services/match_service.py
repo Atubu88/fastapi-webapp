@@ -159,7 +159,7 @@ async def _get_match_teams(
 
 
 async def _ensure_match_quiz_assigned(match_id: str) -> str:
-    """Return quiz id for a match, fetching it from Supabase if needed."""
+    """Return quiz id for a match, fetching it from the database if needed."""
 
     quiz_id = MATCH_QUIZ_CACHE.get(match_id)
     if quiz_id:
@@ -205,7 +205,7 @@ async def _ensure_match_quiz_assigned(match_id: str) -> str:
 
     quiz_id = quizzes[0].get("id")
     if not quiz_id:
-        logging.error("Supabase returned quiz without id for match %s", match_id)
+        logging.error("Database returned quiz without id for match %s", match_id)
         raise HTTPException(500, detail="Unable to assign quiz")
 
     MATCH_QUIZ_CACHE[match_id] = quiz_id
