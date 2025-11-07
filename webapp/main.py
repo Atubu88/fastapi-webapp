@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from webapp.config import BOT_TOKEN
+from webapp.config import get_bot_token
 from webapp.services.match_service import (
     _ensure_match_quiz_assigned,
 )
@@ -50,8 +50,7 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
 # ВАЖНО: убираем кавычки/пробелы у токена
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is required for Telegram init data validation.")
+BOT_TOKEN = get_bot_token()
 
 app = FastAPI(title="Quiz Mini App")
 

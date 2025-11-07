@@ -19,7 +19,9 @@ if config.config_file_name is not None:
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
     try:
-        from webapp.config import DATABASE_URL as app_database_url  # type: ignore
+        from webapp.config import get_database_url
+
+        app_database_url = get_database_url()
     except Exception:
         app_database_url = None
     database_url = app_database_url
