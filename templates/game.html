@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+  .question-card-transition {
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
+    transition: opacity 600ms ease-out, transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+
+  .question-card-transition.question-card--visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .question-card-transition.question-card--leaving {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.98);
+    transition: opacity 400ms ease-in, transform 400ms ease-in;
+  }
+  </style>
+
+
+  <div class="container mt-0 mb-1 pt-0" style="margin-top: -0.5rem;">
+    <h2 class="mb-2 fs-5 text-center">{{ quiz.title }}</h2>
+    <hr class="my-2">
+
+
+    {% if feedback %}
+      <div class="alert alert-{{ feedback.status }} py-2 px-3 small" role="alert" style="line-height: 1.3;">
+        <strong>{{ feedback.message }}</strong>
+        {% if answered_question %}
+          <div class="mt-2">
+            <div class="fw-semibold">Вопрос:</div>
+            <div>{{ answered_question.text }}</div>
+          </div>
+        {% endif %}
+        {% if selected_answer_text %}
+          <div class="mt-2">
+            <span class="fw-semibold">Ваш ответ:</span>
+            <span>{{ selected_answer_text }}</span>
+          </div>
+        {% endif %}
+        {% if explanation %}
+          <div class="mt-3">
+            <span class="fw-semibold">Объяснение:</span>
+            <div class="mt-1">{{ explanation }}</div>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if question %}
+      <div class="card shadow-sm mb-4 question-card-transition" data-question-card>
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <h4 class="mb-0">{{ question.text }}</h4>
+            <span class="badge text-bg-secondary">Вопрос {{ current_question_number }} из {{ total_questions }}</span>
+          </div>
+          <form
+            id="answer-form"
+            method="get"
+            action="{{ url_for('game_screen', match_id=match_id) }}"
+          >
+            <input type="hidden" name="team_id" value="{{ team_id }}" />
+            <input type="hidden" name="user_id" value="{{ current_user_id }}" />
+            <input type="hidden" name="question_index" value="{{ question_index }}" />
+            {% for option in answers %}
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  name="option"
+                  value="{{ option.id }}"
+                  id="opt{{ option.id }}"
+                  {% if loop.first %}required{% endif %}
+                >
+                <label class="form-check-label" for="opt{{ option.id }}">{{ option.text }}</label>
+              </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary mt-3">Ответить</button>
+          </form>
+        </div>
+      </div>
+    {% elif total_questions == 0 %}
+      <div class="alert alert-secondary" role="alert">
+        Нет вопросов для этой викторины. Попросите организатора добавить их в Supabase.
+      </div>
+    {% else %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h3 class="h4">Викторина завершена!</h3>
+          <p class="text-muted mb-4">Вы ответили на все вопросы. Спасибо за игру!</p>
+
+          {% if team_waiting_for_members %}
+            <div
+              class="alert alert-info"
+              role="alert"
+              {% if team_status_poll_url %}data-team-progress-container data-team-status-url="{{ team_status_poll_url }}"{% endif %}
+            >
+              <p class="mb-2">{{ team_waiting_message }}</p>
+              {% if team_members_total %}
+                <p class="mb-0 text-muted small">
+                  Прогресс команды:
+                  <span data-team-progress-counter>{{ team_members_completed }} из {{ team_members_total }}</span>
+                </p>
+              {% endif %}
+            </div>
+          {% else %}
+            {% if waiting_for_other_teams %}
+              <div
+                class="alert alert-info"
+                role="alert"
+                {% if team_status_poll_url %}
+                  data-scoreboard-waiting
+                  data-team-status-url="{{ team_status_poll_url }}"
+                {% endif %}
+              >
+                {{ waiting_for_other_teams_message or "Ожидайте, пока все команды завершат игру, чтобы увидеть результаты." }}
+              </div>
+            {% else %}
+              {% if winning_team %}
+                <div class="mb-4">
+                  <div class="fs-4 mb-1">🏆 {{ winning_team.team_name }}</div>
+                  <div class="text-secondary">💯 {{ winning_team.score }} очков</div>
+                </div>
+              {% else %}
+                <p class="mb-4">Результаты команд появятся, как только организатор их опубликует.</p>
+              {% endif %}
+
+              {% if team_scoreboard %}
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th scope="col" class="text-center">Место</th>
+                        <th scope="col">Команда</th>
+                        <th scope="col" class="text-end">Очки</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for entry in team_scoreboard %}
+                        {% set rank = loop.index %}
+                        {% if rank == 1 %}
+                          {% set medal = "🥇" %}
+                        {% elif rank == 2 %}
+                          {% set medal = "🥈" %}
+                        {% elif rank == 3 %}
+                          {% set medal = "🥉" %}
+                        {% else %}
+                          {% set medal = "" %}
+                        {% endif %}
+                        <tr>
+                          <td class="text-center">{{ medal }} {{ rank }}</td>
+                          <td>{{ entry.team_name }}</td>
+                          <td class="text-end fw-semibold">{{ entry.score }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="alert alert-info" role="alert">
+        Можно вернуться на <a href="/team" class="alert-link">страницу команды</a>
+        или на <a href="/" class="alert-link">главную</a>.
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (function () {
+      const questionCard = document.querySelector('[data-question-card]');
+      if (!questionCard) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        setTimeout(() => {
+            questionCard.classList.add('question-card--visible');
+       }, 100); // задержка 100 мс
+     });
+
+      const form = questionCard.querySelector('form');
+      if (!form) {
+        return;
+      }
+
+      let isSubmitting = false;
+
+      form.addEventListener('submit', (event) => {
+        if (isSubmitting) {
+          return;
+        }
+
+        event.preventDefault();
+
+        questionCard.classList.remove('question-card--visible');
+        questionCard.classList.add('question-card--leaving');
+
+        const handleTransitionEnd = (transitionEvent) => {
+          if (transitionEvent.target !== questionCard || transitionEvent.propertyName !== 'opacity') {
+            return;
+          }
+
+          questionCard.removeEventListener('transitionend', handleTransitionEnd);
+          isSubmitting = true;
+          form.submit();
+        };
+
+        questionCard.addEventListener('transitionend', handleTransitionEnd);
+      });
+    })();
+  </script>
+  {% if team_status_poll_url and (team_waiting_for_members or waiting_for_other_teams) %}
+    <script>
+      (function () {
+        const progressContainer = document.querySelector('[data-team-progress-container]');
+        const scoreboardContainer = document.querySelector('[data-scoreboard-waiting]');
+        const statusContainer = progressContainer || scoreboardContainer;
+
+        if (!statusContainer) {
+          return;
+        }
+
+        const statusUrl = statusContainer.getAttribute('data-team-status-url');
+        if (!statusUrl) {
+          return;
+        }
+
+        const counter = progressContainer
+          ? progressContainer.querySelector('[data-team-progress-counter]')
+          : null;
+        const shouldUpdateCounter = Boolean(counter);
+        const shouldWatchScoreboard = Boolean(scoreboardContainer);
+        const POLL_INTERVAL_MS = 5000;
+
+        const pollStatus = async () => {
+          try {
+            const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+            if (!response.ok) {
+              return;
+            }
+
+            const data = await response.json();
+            if (shouldWatchScoreboard && data && data.all_teams_completed) {
+              window.location.reload();
+              return;
+            }
+
+            if (
+              shouldUpdateCounter &&
+              typeof data.team_members_completed === 'number' &&
+              typeof data.team_members_total === 'number'
+            ) {
+              counter.textContent = `${data.team_members_completed} из ${data.team_members_total}`;
+            }
+
+            if (!shouldWatchScoreboard && data && data.team_completed) {
+              window.location.reload();
+            }
+          } catch (error) {
+            console.warn('Не удалось обновить статус команды', error);
+          }
+        };
+
+        pollStatus();
+        setInterval(pollStatus, POLL_INTERVAL_MS);
+      })();
+    </script>
+  {% endif %}
+{% endblock %}
