@@ -184,7 +184,7 @@ async def _handle_users(
         filters = _parse_filters(params)
         limit = int(params.get("limit")) if params and params.get("limit") else None
 
-        def query(session):
+        async def query(session):
             stmt = select(User)
             ids = filters.get("id")
             if isinstance(ids, list):
@@ -205,7 +205,7 @@ async def _handle_users(
                     stmt = stmt.where(User.username == value)
             if limit is not None:
                 stmt = stmt.limit(limit)
-            rows = session.execute(stmt).scalars().all()
+            rows = (await session.execute(stmt)).scalars().all()
             return [_apply_select(_serialize_user(row), params) for row in rows]
 
         return await run_in_session_async(query)
@@ -214,7 +214,7 @@ async def _handle_users(
         if not isinstance(json_payload, dict):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid payload for users")
 
-        def create(session):
+        async def create(session):
             user = User(
                 telegram_id=_to_int(json_payload.get("telegram_id")),
                 username=json_payload.get("username"),
@@ -223,7 +223,7 @@ async def _handle_users(
             )
             session.add(user)
             try:
-                session.flush()
+                await session.flush()
             except IntegrityError as exc:  # pragma: no cover - defensive
                 LOGGER.warning("Failed to insert user: %s", exc)
                 raise HTTPException(status.HTTP_409_CONFLICT, detail="User already exists") from exc
@@ -243,7 +243,7 @@ async def _handle_teams(
         filters = _parse_filters(params)
         limit = int(params.get("limit")) if params and params.get("limit") else None
 
-        def query(session):
+        async def query(session):
             stmt = select(Team)
             if "id" in filters:
                 stmt = stmt.where(Team.id == _to_uuid(filters["id"]))
@@ -255,7 +255,7 @@ async def _handle_teams(
                 stmt = stmt.where(Team.captain_id == _to_int(filters["captain_id"]))
             if limit is not None:
                 stmt = stmt.limit(limit)
-            rows = session.execute(stmt).scalars().all()
+            rows = (await session.execute(stmt)).scalars().all()
             return [_apply_select(_serialize_team(row), params) for row in rows]
 
         return await run_in_session_async(query)
@@ -271,7 +271,7 @@ async def _handle_teams(
                 detail=f"Missing team fields: {', '.join(missing)}",
             )
 
-        def create(session):
+        async def create(session):
             team = Team(
                 name=json_payload.get("name"),
                 code=json_payload.get("code"),
@@ -281,7 +281,7 @@ async def _handle_teams(
                 quiz_id=json_payload.get("quiz_id"),
             )
             session.add(team)
-            session.flush()
+            await session.flush()
             return [_serialize_team(team)]
 
         return await run_in_session_async(create)
@@ -293,10 +293,10 @@ async def _handle_teams(
         if not isinstance(json_payload, dict):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid team update payload")
 
-        def update_team(session):
+        async def update_team(session):
             team_id = _to_uuid(filters["id"])
             stmt = select(Team).where(Team.id == team_id)
-            team = session.execute(stmt).scalars().one_or_none()
+            team = (await session.execute(stmt)).scalars().one_or_none()
             if not team:
                 raise _not_found("teams")
 
@@ -313,7 +313,7 @@ async def _handle_teams(
                     team.start_time = _parse_iso_datetime(str(json_payload["start_time"]))
                 except ValueError as exc:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid start_time") from exc
-            session.flush()
+            await session.flush()
             return [_serialize_team(team)]
 
         return await run_in_session_async(update_team)
@@ -323,7 +323,7 @@ async def _handle_teams(
         if not filters:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Deletion filter required")
 
-        def delete_team(session):
+        async def delete_team(session):
             stmt = delete(Team)
             if "id" in filters:
                 stmt = stmt.where(Team.id == _to_uuid(filters["id"]))
@@ -331,7 +331,7 @@ async def _handle_teams(
                 stmt = stmt.where(Team.code == filters["code"])
             if "match_id" in filters:
                 stmt = stmt.where(Team.match_id == filters["match_id"])
-            session.execute(stmt)
+            await session.execute(stmt)
             return None
 
         return await run_in_session_async(delete_team)
@@ -347,14 +347,14 @@ async def _handle_team_members(
     if method == "GET":
         filters = _parse_filters(params)
 
-        def query(session):
+        async def query(session):
             stmt = select(TeamMember)
             if "team_id" in filters:
                 stmt = stmt.where(TeamMember.team_id == _to_uuid(filters["team_id"]))
             if "user_id" in filters:
                 stmt = stmt.where(TeamMember.user_id == _to_int(filters["user_id"]))
             stmt = stmt.order_by(asc(TeamMember.joined_at))
-            members = session.execute(stmt).scalars().all()
+            members = (await session.execute(stmt)).scalars().all()
             return [_apply_select(_serialize_team_member(member), params) for member in members]
 
         return await run_in_session_async(query)
@@ -365,14 +365,14 @@ async def _handle_team_members(
         if not json_payload.get("team_id") or not json_payload.get("user_id"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="team_id and user_id are required")
 
-        def create(session):
+        async def create(session):
             member = TeamMember(
                 team_id=_to_uuid(json_payload.get("team_id")),
                 user_id=_to_int(json_payload.get("user_id")),
                 is_captain=bool(json_payload.get("is_captain")),
             )
             session.add(member)
-            session.flush()
+            await session.flush()
             return [_serialize_team_member(member)]
 
         return await run_in_session_async(create)
@@ -382,13 +382,13 @@ async def _handle_team_members(
         if not filters:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Deletion filter required")
 
-        def remove(session):
+        async def remove(session):
             stmt = delete(TeamMember)
             if "team_id" in filters:
                 stmt = stmt.where(TeamMember.team_id == _to_uuid(filters["team_id"]))
             if "user_id" in filters:
                 stmt = stmt.where(TeamMember.user_id == _to_int(filters["user_id"]))
-            session.execute(stmt)
+            await session.execute(stmt)
             return None
 
         return await run_in_session_async(remove)
@@ -405,7 +405,7 @@ async def _handle_team_results(
         filters = _parse_filters(params)
         order_clause = _parse_order_clause(params.get("order") if params else None)
 
-        def query(session):
+        async def query(session):
             stmt = select(TeamResult)
             if "quiz_id" in filters:
                 stmt = stmt.where(TeamResult.quiz_id == _to_int(filters["quiz_id"]))
@@ -416,7 +416,7 @@ async def _handle_team_results(
                 if column_attr is None:
                     continue
                 stmt = stmt.order_by(desc(column_attr) if desc_flag else asc(column_attr))
-            results = session.execute(stmt).scalars().all()
+            results = (await session.execute(stmt)).scalars().all()
             return [_apply_select(_serialize_team_result(result), params) for result in results]
 
         return await run_in_session_async(query)
@@ -427,7 +427,7 @@ async def _handle_team_results(
         if not json_payload.get("team_id") or json_payload.get("quiz_id") in (None, ""):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="team_id and quiz_id are required")
 
-        def create(session):
+        async def create(session):
             result = TeamResult(
                 team_id=_to_uuid(json_payload.get("team_id")),
                 quiz_id=_to_int(json_payload.get("quiz_id")),
@@ -435,7 +435,7 @@ async def _handle_team_results(
                 time_taken=float(json_payload.get("time_taken")) if json_payload.get("time_taken") is not None else None,
             )
             session.add(result)
-            session.flush()
+            await session.flush()
             return [_serialize_team_result(result)]
 
         return await run_in_session_async(create)
@@ -447,10 +447,10 @@ async def _handle_team_results(
         if not isinstance(json_payload, dict):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid team result payload")
 
-        def update_result(session):
+        async def update_result(session):
             result_id = _to_uuid(filters["id"])
             stmt = select(TeamResult).where(TeamResult.id == result_id)
-            result = session.execute(stmt).scalars().one_or_none()
+            result = (await session.execute(stmt)).scalars().one_or_none()
             if not result:
                 raise _not_found("team_results")
             if "score" in json_payload:
@@ -458,7 +458,7 @@ async def _handle_team_results(
             if "time_taken" in json_payload:
                 value = json_payload["time_taken"]
                 result.time_taken = float(value) if value is not None else None
-            session.flush()
+            await session.flush()
             return [_serialize_team_result(result)]
 
         return await run_in_session_async(update_result)
@@ -481,7 +481,7 @@ async def _handle_quizzes(
     if select_clause and "questions" not in select_clause:
         include_questions = False
 
-    def query(session):
+    async def query(session):
         stmt = select(Quiz)
         if include_questions:
             stmt = stmt.options(selectinload(Quiz.questions).selectinload(Question.options))
@@ -499,7 +499,7 @@ async def _handle_quizzes(
                 stmt = stmt.order_by(desc(column_attr) if desc_flag else asc(column_attr))
         if limit is not None:
             stmt = stmt.limit(limit)
-        quizzes = session.execute(stmt).scalars().all()
+        quizzes = (await session.execute(stmt)).scalars().all()
         response: List[Dict[str, Any]] = []
         for quiz in quizzes:
             payload = _serialize_quiz(quiz, include_questions=include_questions)
@@ -541,23 +541,23 @@ async def _fetch_single_record(table: str, filters: Dict[str, str], select: str 
 
 
 async def _fetch_quiz_options(select: str = "id,title") -> List[Dict[str, Any]]:
-    def query(session):
+    async def query(session):
         stmt = select(Quiz.id, Quiz.title).order_by(asc(Quiz.title))
-        rows = session.execute(stmt).all()
+        rows = (await session.execute(stmt)).all()
         return [{"id": row.id, "title": row.title} for row in rows]
 
     return await run_in_session_async(query)
 
 
 async def _fetch_active_quiz() -> Dict[str, Any]:
-    def query(session):
+    async def query(session):
         stmt = (
             select(Quiz)
             .options(selectinload(Quiz.questions).selectinload(Question.options))
             .where(Quiz.is_active.is_(True))
             .order_by(asc(Quiz.id))
         )
-        quiz = session.execute(stmt).scalars().first()
+        quiz = (await session.execute(stmt)).scalars().first()
         if not quiz:
             raise _not_found("quizzes")
         return _serialize_quiz(quiz, include_questions=True)
