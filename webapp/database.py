@@ -11,14 +11,22 @@ from sqlalchemy.orm import Session, sessionmaker
 from webapp.config import DATABASE_URL
 from webapp.models import Base
 
-_engine = create_engine(DATABASE_URL, future=True)
-SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+# Создаём движок SQLAlchemy
+engine = create_engine(DATABASE_URL, future=True)
+
+# Создаём фабрику сессий
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False
+)
 
 
 @contextmanager
 def session_scope() -> Generator[Session, None, None]:
     """Provide a transactional scope around a series of operations."""
-
     session = SessionLocal()
     try:
         yield session
@@ -31,9 +39,8 @@ def session_scope() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Create all database tables if they do not exist."""
-
-    Base.metadata.create_all(bind=_engine)
+    """Create all database tables if they do not exist (not used with Alembic)."""
+    Base.metadata.create_all(bind=engine)
 
 
 T = TypeVar("T")
@@ -41,12 +48,10 @@ T = TypeVar("T")
 
 def run_in_session(func: Callable[[Session], T]) -> T:
     """Execute the given callable inside a database session."""
-
     with session_scope() as session:
         return func(session)
 
 
 async def run_in_session_async(func: Callable[[Session], T]) -> T:
     """Async helper that delegates execution to a thread pool."""
-
     return await asyncio.to_thread(run_in_session, func)
