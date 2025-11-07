@@ -135,7 +135,7 @@ async def _find_existing_team_for_user(user: Dict[str, Any]) -> Optional[Dict[st
 
     # На случай, если запись участника отсутствует, но пользователь значится капитаном.
     captain_team = await _fetch_single_record(
-        "teams", {"captain_id": f"eq.{user['telegram_id']}"}
+        "teams", {"captain_id": f"eq.{user['id']}"}
     )
     if captain_team:
         return captain_team

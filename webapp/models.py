@@ -5,6 +5,8 @@ Telegram bot can continue working with the existing cloud database.
 """
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -203,7 +205,7 @@ class Setting(Base):
 class SurvivalResult(Base):
     __tablename__ = "survival_results"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
     username = Column(Text, nullable=False)
     score = Column(Integer, nullable=False, server_default=text("0"))
@@ -221,22 +223,17 @@ class SurvivalResult(Base):
 class Team(Base):
     __tablename__ = "teams"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
     code = Column(Text, nullable=False)
-    captain_id = Column(BigInteger, ForeignKey("users.telegram_id"), nullable=False)
+    captain_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     start_time = Column(DateTime(timezone=True))
     match_id = Column(Text)
     ready = Column(Boolean, server_default=text("false"))
     quiz_id = Column(Text)
 
-    captain = relationship(
-        "User",
-        primaryjoin="User.telegram_id==Team.captain_id",
-        viewonly=True,
-        foreign_keys=[captain_id],
-    )
+    captain = relationship("User", back_populates="captain_of_teams", foreign_keys=[captain_id])
     members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     results = relationship("TeamResult", back_populates="team", cascade="all, delete-orphan")
 
@@ -244,25 +241,20 @@ class Team(Base):
 class TeamMember(Base):
     __tablename__ = "team_members"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"))
-    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     is_captain = Column(Boolean, server_default=text("false"))
     joined_at = Column(DateTime(timezone=True), server_default=func.now())
 
     team = relationship("Team", back_populates="members")
-    user = relationship(
-        "User",
-        back_populates="team_memberships",
-        primaryjoin="User.telegram_id==TeamMember.user_id",
-        foreign_keys=[user_id],
-    )
+    user = relationship("User", back_populates="team_memberships", foreign_keys=[user_id])
 
 
 class TeamResult(Base):
     __tablename__ = "team_results"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"))
     quiz_id = Column(Integer, ForeignKey("quizzes.id", ondelete="SET NULL"))
     score = Column(Integer, nullable=False)
@@ -306,6 +298,7 @@ class User(Base):
     matching_quiz_results = relationship("MatchingQuizResult", back_populates="user", cascade="all, delete-orphan")
     survival_results = relationship("SurvivalResult", back_populates="user", cascade="all, delete-orphan")
     team_memberships = relationship("TeamMember", back_populates="user", cascade="all, delete-orphan")
+    captain_of_teams = relationship("Team", back_populates="captain", cascade="all, delete-orphan")
     user_attempts = relationship("UserAttempt", back_populates="user", cascade="all, delete-orphan")
 
 
