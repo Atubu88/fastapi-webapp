@@ -8,11 +8,12 @@ from typing import Callable, Generator, TypeVar
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from webapp.config import DATABASE_URL
+from webapp.config import get_database_url
 from webapp.models import Base
 
 
 # Создаём движок SQLAlchemy
+DATABASE_URL = get_database_url()
 engine = create_engine(DATABASE_URL, future=True)
 
 # Создаём фабрику сессий
