@@ -1,9 +1,10 @@
+import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
+
+from webapp.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -14,11 +15,23 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Ensure Alembic uses the same database URL as the application.
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    try:
+        from webapp.config import DATABASE_URL as app_database_url  # type: ignore
+    except Exception:
+        app_database_url = None
+    database_url = app_database_url
+
+if not database_url:
+    raise RuntimeError("DATABASE_URL environment variable must be set for Alembic migrations.")
+
+config.set_main_option("sqlalchemy.url", database_url)
+
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
