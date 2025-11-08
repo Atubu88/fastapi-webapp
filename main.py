@@ -1,14 +1,40 @@
-"""Compatibility module that exposes the FastAPI application instance."""
+from __future__ import annotations
 
-# ✅ Загружаем .env ДО импорта webapp.main
-from dotenv import load_dotenv
-from pathlib import Path
+import httpx
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
-env_path = Path(__file__).resolve().parent / ".env"
-print("🔄 Preloading .env before imports:", env_path)
-load_dotenv(dotenv_path=env_path)
+from core.config import STATIC_DIR, TEMPLATES_DIR, get_bot_token
+from routers.auth import router as auth_router
+from routers.main_router import router as main_router  # 👈 главный интерфейс (index и выбор режима)
 
-# ✅ Импорт приложения после загрузки переменных окружения
-from webapp.main import app
+# ------------------ Инициализация приложения ------------------
 
-__all__ = ["app"]
+app = FastAPI(title="Quiz Mini App")
+
+# Подключаем статику и шаблоны
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# Подключаем роутеры
+app.include_router(auth_router)
+app.include_router(main_router)
+
+# ------------------ Проверка Telegram токена ------------------
+
+@app.on_event("startup")
+async def startup_check():
+    """При старте проверяем, что BOT_TOKEN рабочий"""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"https://api.telegram.org/bot{get_bot_token()}/getMe")
+        print("✅ Startup getMe:", r.text)
+    except Exception as e:
+        print("⚠️ Startup getMe error:", repr(e))
+
+
+# ------------------ Точка входа ------------------
+
+# Запуск в режиме разработки:
+# uvicorn main:app --reload

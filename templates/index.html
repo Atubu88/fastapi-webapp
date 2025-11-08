@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="container">
+  <h1 class="title">Выбери режим игры</h1>
+  <div class="modes">
+    {% for mode in modes %}
+    <a class="mode-card" href="/{{ mode.id }}">
+      <div class="emoji">{{ mode.name.split(' ')[0] }}</div>
+      <div class="info">
+        <h2>{{ mode.name }}</h2>
+        <p>{{ mode.desc }}</p>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
