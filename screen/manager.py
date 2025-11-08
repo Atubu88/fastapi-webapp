@@ -9,7 +9,17 @@ class Room:
     """Простая структура данных для хранения информации о комнате."""
 
     room_id: str
+    players: Dict[str, "Player"] = field(default_factory=dict)
     metadata: Dict[str, str] = field(default_factory=dict)
+    events: list[tuple[str, dict | None]] = field(default_factory=list)
+
+
+@dataclass
+class Player:
+    """Игрок, подключённый к комнате."""
+
+    name: str
+    answered: bool = False
 
 
 class ScreenRoomManager:
@@ -25,6 +35,29 @@ class ScreenRoomManager:
 
     def get_room(self, room_id: str) -> Room | None:
         return self._rooms.get(room_id)
+
+    def add_player(self, room_id: str, player_name: str) -> Player:
+        room = self.get_room(room_id)
+        if room is None:
+            raise ValueError(f"Room '{room_id}' not found")
+
+        player = room.players.get(player_name)
+        if player is None:
+            player = Player(name=player_name)
+            room.players[player_name] = player
+        return player
+
+    def all_answered(self, room_id: str) -> bool:
+        room = self.get_room(room_id)
+        if room is None or not room.players:
+            return False
+        return all(player.answered for player in room.players.values())
+
+    def broadcast(self, room_id: str, event: str, payload: Dict | None = None) -> None:
+        room = self.get_room(room_id)
+        if room is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        room.events.append((event, payload))
 
 
 room_manager = ScreenRoomManager()

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Подключение к игре</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f7f8fa;
+            color: #222;
+        }
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+            padding: 2rem;
+            text-align: center;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: #2563eb;
+        }
+        p {
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+        #status {
+            font-size: 0.95rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Вы в игре!</h1>
+        <p>
+            Игрок <strong>{{ player_name }}</strong> подключился к комнате
+            <strong>{{ room_id }}</strong>.
+        </p>
+        <p id="status">Ожидание событий от ведущего…</p>
+    </div>
+
+    <script>
+        const roomId = "{{ room_id }}";
+        const playerName = "{{ player_name }}";
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const wsUrl = `${protocol}://${window.location.host}/ws/screen/${roomId}`;
+        const socket = new WebSocket(wsUrl);
+
+        socket.addEventListener('open', () => {
+            console.log('WebSocket открыт');
+            socket.send(JSON.stringify({ type: 'join', player: playerName }));
+            document.getElementById('status').textContent = 'Соединение установлено. Ожидание заданий…';
+        });
+
+        socket.addEventListener('message', (event) => {
+            console.log('Получено событие', event.data);
+        });
+
+        socket.addEventListener('close', () => {
+            document.getElementById('status').textContent = 'Соединение потеряно. Попробуйте обновить страницу.';
+        });
+
+        socket.addEventListener('error', () => {
+            document.getElementById('status').textContent = 'Ошибка соединения. Попробуйте обновить страницу.';
+        });
+    </script>
+</body>
+</html>
