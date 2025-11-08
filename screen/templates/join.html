@@ -44,32 +44,169 @@
             <strong>{{ room_id }}</strong>.
         </p>
         <p id="status">Ожидание событий от ведущего…</p>
+
+        <section id="question" hidden>
+            <p id="question-progress"></p>
+            <h2 id="question-title"></h2>
+            <p id="question-text"></p>
+            <div id="options"></div>
+        </section>
+
+        <section id="result" hidden>
+            <h3>Результаты</h3>
+            <p id="answer-summary"></p>
+            <ul id="scoreboard"></ul>
+        </section>
     </div>
 
     <script>
         const roomId = "{{ room_id }}";
         const playerName = "{{ player_name }}";
         const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-        const wsUrl = `${protocol}://${window.location.host}/ws/screen/${roomId}`;
+        const wsUrl = `${protocol}://${window.location.host}/screen/ws/player/${roomId}`;
         const socket = new WebSocket(wsUrl);
 
+        const statusEl = document.getElementById('status');
+        const questionSection = document.getElementById('question');
+        const questionProgress = document.getElementById('question-progress');
+        const questionTitle = document.getElementById('question-title');
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options');
+        const resultSection = document.getElementById('result');
+        const answerSummary = document.getElementById('answer-summary');
+        const scoreboardList = document.getElementById('scoreboard');
+
+        let hasAnswered = false;
+        let currentQuestion = null;
+
         socket.addEventListener('open', () => {
-            console.log('WebSocket открыт');
-            socket.send(JSON.stringify({ type: 'join', player: playerName }));
-            document.getElementById('status').textContent = 'Соединение установлено. Ожидание заданий…';
+            socket.send(JSON.stringify({ action: 'join', player: playerName }));
+            statusEl.textContent = 'Соединение установлено. Ожидаем вопрос…';
         });
 
         socket.addEventListener('message', (event) => {
-            console.log('Получено событие', event.data);
+            const data = JSON.parse(event.data);
+            const { event: eventName, payload } = data;
+
+            switch (eventName) {
+                case 'player_joined':
+                    statusEl.textContent = `В комнате ${payload.players.length} игрок(ов).`;
+                    break;
+                case 'show_question':
+                    renderQuestion(payload);
+                    break;
+                case 'show_results':
+                    renderResults(payload);
+                    break;
+                case 'show_final':
+                    renderFinal(payload);
+                    break;
+                default:
+                    break;
+            }
         });
 
         socket.addEventListener('close', () => {
-            document.getElementById('status').textContent = 'Соединение потеряно. Попробуйте обновить страницу.';
+            statusEl.textContent = 'Соединение потеряно. Попробуйте обновить страницу.';
         });
 
         socket.addEventListener('error', () => {
-            document.getElementById('status').textContent = 'Ошибка соединения. Попробуйте обновить страницу.';
+            statusEl.textContent = 'Ошибка соединения. Попробуйте обновить страницу.';
         });
+
+        const renderQuestion = (payload) => {
+            if (!payload || !payload.question) {
+                return;
+            }
+
+            currentQuestion = payload.question;
+            hasAnswered = false;
+            questionSection.hidden = false;
+            resultSection.hidden = true;
+
+            const { question_number: number, total_questions: total, question } = payload;
+            questionProgress.textContent = `Вопрос ${number} из ${total}`;
+            const title = question.title || question.text || 'Вопрос';
+            questionTitle.textContent = title;
+            const description = question.description || (question.title ? question.text : '');
+            questionText.textContent = description || '';
+
+            optionsContainer.innerHTML = '';
+            (question.options || []).forEach((option) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = `${option.id}. ${option.text}`;
+                button.classList.add('btn');
+                button.addEventListener('click', () => sendAnswer(option.id, button));
+                optionsContainer.appendChild(button);
+            });
+
+            statusEl.textContent = 'Выберите ответ.';
+        };
+
+        const sendAnswer = (answerId, button) => {
+            if (hasAnswered || !socket || socket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            socket.send(JSON.stringify({ action: 'answer', answer: answerId }));
+            hasAnswered = true;
+            disableOptions(button);
+            statusEl.textContent = 'Ответ отправлен. Ожидаем других игроков…';
+        };
+
+        const disableOptions = (selectedButton) => {
+            const buttons = optionsContainer.querySelectorAll('button');
+            buttons.forEach((btn) => {
+                btn.disabled = true;
+                if (btn === selectedButton) {
+                    btn.classList.add('selected');
+                }
+            });
+        };
+
+        const renderResults = (payload) => {
+            if (!payload) {
+                return;
+            }
+
+            questionSection.hidden = true;
+            resultSection.hidden = false;
+
+            const result = (payload.results || []).find((item) => item.player === playerName);
+            const answerText = mapAnswerToText(result?.answer);
+            if (result?.is_correct) {
+                answerSummary.textContent = `Верно! Вы выбрали вариант ${result.answer} (${answerText}). Ваш счёт: ${result.score}.`;
+            } else {
+                answerSummary.textContent = `Неверно. Правильный ответ: ${payload.correct_answer}. Вы выбрали ${result?.answer ?? '—'} (${answerText || '—'}).`;
+            }
+
+            renderScoreboard(scoreboardList, payload.scoreboard || []);
+        };
+
+        const renderFinal = (payload) => {
+            questionSection.hidden = true;
+            resultSection.hidden = false;
+            answerSummary.textContent = 'Игра завершена! Итоговый счёт:';
+            renderScoreboard(scoreboardList, payload.scoreboard || []);
+        };
+
+        const renderScoreboard = (container, data) => {
+            container.innerHTML = '';
+            data.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${index + 1}. ${item.player} — ${item.score}`;
+                container.appendChild(li);
+            });
+        };
+
+        const mapAnswerToText = (answerId) => {
+            if (!currentQuestion || !answerId) {
+                return '';
+            }
+            const option = (currentQuestion.options || []).find((opt) => opt.id === answerId);
+            return option ? option.text : '';
+        };
     </script>
 </body>
 </html>
