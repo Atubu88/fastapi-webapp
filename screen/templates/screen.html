@@ -1,0 +1,67 @@
+{% extends "../templates/base.html" %}
+
+{% block content %}
+<section class="screen-mode">
+  <h1>🎬 Экранный режим</h1>
+  <p>
+    Создайте комнату, чтобы участники могли подключиться со своих телефонов и
+    играть в режиме реального времени.
+  </p>
+
+  <button id="create-room" class="btn">Создать комнату</button>
+
+  <div id="room-info" class="room-info" hidden>
+    <h2>Код комнаты: <span id="room-code"></span></h2>
+    <p>
+      Поделитесь ссылкой или QR-кодом для подключения:
+      <a id="room-link" href="#" target="_blank" rel="noopener">ссылка для входа</a>
+    </p>
+    <div class="qr-wrapper">
+      <img id="room-qr" alt="QR-код для подключения" />
+    </div>
+  </div>
+
+  <p id="room-error" class="error" hidden></p>
+</section>
+
+<script>
+  const createRoomBtn = document.getElementById("create-room");
+  const roomInfo = document.getElementById("room-info");
+  const roomCode = document.getElementById("room-code");
+  const roomLink = document.getElementById("room-link");
+  const roomQr = document.getElementById("room-qr");
+  const roomError = document.getElementById("room-error");
+
+  const buildQrUrl = (joinUrl) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
+
+  createRoomBtn?.addEventListener("click", async () => {
+    roomError.hidden = true;
+    try {
+      const response = await fetch("/screen/create-room", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Не удалось создать комнату. Попробуйте ещё раз.");
+      }
+
+      const data = await response.json();
+      const { room_id: roomId, join_url: joinUrl } = data;
+
+      roomCode.textContent = roomId;
+      roomLink.href = joinUrl;
+      roomLink.textContent = joinUrl;
+      roomQr.src = buildQrUrl(joinUrl);
+      roomQr.hidden = false;
+      roomInfo.hidden = false;
+    } catch (error) {
+      roomError.textContent = error.message || "Произошла неизвестная ошибка.";
+      roomError.hidden = false;
+    }
+  });
+</script>
+{% endblock %}
