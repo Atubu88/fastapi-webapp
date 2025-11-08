@@ -11,7 +11,8 @@ from core.config import BASE_DIR
 from .manager import room_manager
 
 router = APIRouter(prefix="/screen", tags=["screen"])
-templates = Jinja2Templates(directory=BASE_DIR / "screen")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
 
 
 def _generate_room_id(length: int = 6) -> str:
@@ -22,7 +23,7 @@ def _generate_room_id(length: int = 6) -> str:
 @router.get("", name="screen:index")
 async def screen_index(request: Request):
     return templates.TemplateResponse(
-        "templates/screen.html",
+        "screen/screen.html",
         {"request": request},
     )
 
@@ -34,9 +35,20 @@ async def create_room():
     join_url = f"https://t.me/victorina2024_bot?startapp=join_{room_id}"
     return JSONResponse({"room_id": room_id, "join_url": join_url})
 
+from fastapi import Request, Form, HTTPException
+from fastapi.responses import HTMLResponse
 
-@router.get("/join", name="screen:join")
-async def join_room(request: Request, code: str, name: str):
+@router.get("/join", response_class=HTMLResponse, name="screen:join")
+async def join_room_get(request: Request, code: str):
+    # Просто отдать join_form.html — он сам получит имя через Telegram
+    return templates.TemplateResponse(
+        "screen/join_form.html",
+        {"request": request, "room_id": code},
+    )
+
+
+@router.post("/join", response_class=HTMLResponse)
+async def join_room_post(request: Request, code: str = Form(...), name: str = Form(...)):
     room = room_manager.get_room(code)
     if room is None:
         raise HTTPException(status_code=404, detail="Комната не найдена")
@@ -44,16 +56,17 @@ async def join_room(request: Request, code: str, name: str):
     try:
         player = room_manager.add_player(code, name)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return templates.TemplateResponse(
-        "templates/join.html",
+        "screen/join.html",
         {
             "request": request,
             "room_id": room.room_id,
             "player_name": player.name,
         },
     )
+
 
 
 @router.websocket("/ws/host/{room_id}", name="screen:ws_host")

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Подключение к комнате</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #f7f8fa;
+      text-align: center;
+    }
+    h1 {
+      color: #2563eb;
+    }
+    p {
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <h1>Подключение к комнате {{ room_id }}</h1>
+  <p>Пожалуйста, подождите...</p>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand(); // Развернуть WebApp
+
+    const user = tg.initDataUnsafe?.user;
+    const code = "{{ room_id }}";
+
+    if (!user) {
+      document.body.innerHTML = "<p>Ошибка: не удалось получить данные Telegram-пользователя.</p>";
+    } else {
+      const name = user.first_name || user.username || "Игрок";
+
+      // Отправляем данные на сервер автоматически
+      fetch("/screen/join", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: new URLSearchParams({code, name})
+      })
+      .then(response => response.text())
+      .then(html => {
+        document.open();
+        document.write(html);
+        document.close();
+      })
+      .catch(err => {
+        document.body.innerHTML = `<p>Ошибка подключения: ${err}</p>`;
+      });
+    }
+  </script>
+</body>
+</html>

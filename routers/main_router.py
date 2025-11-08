@@ -5,13 +5,26 @@ from core.config import TEMPLATES_DIR
 router = APIRouter(tags=["main"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+from fastapi.responses import RedirectResponse
+
+
 
 @router.get("/", name="index")
 async def index(request: Request):
     """
-    Отображает выбор режима викторины.
-    Типы храним просто в коде — их немного.
+    Отображает выбор режима или перенаправляет в комнату,
+    если Mini App открыт по ссылке ?tgWebAppStartParam=join_<код>
     """
+    # Telegram передаёт параметр как tgWebAppStartParam, а не startapp
+    start_param = (
+        request.query_params.get("startapp")
+        or request.query_params.get("tgWebAppStartParam")
+    )
+
+    if start_param and start_param.startswith("join_"):
+        code = start_param.replace("join_", "")
+        return RedirectResponse(url=f"/screen/join?code={code}")
+
     modes = [
         {
             "id": "screen",
