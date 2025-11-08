@@ -10,8 +10,8 @@ from sqlalchemy import asc, delete, desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from webapp.database import run_in_session_async
-from webapp.models import Option, Question, Quiz, Team, TeamMember, TeamResult, User
+from webapp.db.models import Option, Question, Quiz, Team, TeamMember, TeamResult, User
+from webapp.db.session import run_in_session_async
 
 
 LOGGER = logging.getLogger(__name__)

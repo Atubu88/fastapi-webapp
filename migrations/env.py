@@ -8,7 +8,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from webapp.models import Base
+from webapp.db.models import Base
 
 config = context.config
 
