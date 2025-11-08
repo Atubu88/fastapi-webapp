@@ -196,11 +196,11 @@ async def login(request: Request) -> HTMLResponse:
     init_payload = _validate_init_data(payload.init_data)
     user_record = await _get_or_create_user(init_payload["user"])
     user_payload = {
-        "id": user_record["id"],
-        "telegram_id": user_record["telegram_id"],
-        "username": user_record.get("username"),
-        "first_name": user_record.get("first_name"),
-        "last_name": user_record.get("last_name"),
+        "id": user_record.id,
+        "telegram_id": user_record.telegram_id,
+        "username": getattr(user_record, "username", None),
+        "first_name": getattr(user_record, "first_name", None),
+        "last_name": getattr(user_record, "last_name", None),
     }
 
     if _is_json_request(request):
