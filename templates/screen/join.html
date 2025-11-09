@@ -39,6 +39,47 @@
         color: #64748b;
     }
 
+    #question {
+        overflow: hidden;
+        margin-top: 1.5rem;
+    }
+
+    .question-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .question-inner.slide-in {
+        animation: slideIn 0.4s ease forwards;
+    }
+
+    .question-inner.slide-out {
+        animation: slideOut 0.35s ease forwards;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-16px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        to {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+    }
+
     /* ===================== */
     /* 🎨 Современные кнопки */
     /* ===================== */
@@ -108,10 +149,11 @@
         <p id="status">Ожидание событий от ведущего…</p>
 
         <section id="question" hidden>
-            <p id="question-progress"></p>
-            <h2 id="question-title"></h2>
-            <p id="question-text"></p>
-            <div id="options"></div>
+            <div id="question-inner" class="question-inner">
+                <p id="question-progress"></p>
+                <h2 id="question-title"></h2>
+                <div id="options"></div>
+            </div>
         </section>
 
         <section id="result" hidden>
@@ -130,9 +172,9 @@
 
         const statusEl = document.getElementById('status');
         const questionSection = document.getElementById('question');
+        const questionInner = document.getElementById('question-inner');
         const questionProgress = document.getElementById('question-progress');
         const questionTitle = document.getElementById('question-title');
-        const questionText = document.getElementById('question-text');
         const optionsContainer = document.getElementById('options');
         const resultSection = document.getElementById('result');
         const answerSummary = document.getElementById('answer-summary');
@@ -140,6 +182,12 @@
 
         let hasAnswered = false;
         let currentQuestion = null;
+
+        questionInner.addEventListener('animationend', (event) => {
+            if (event.animationName === 'slideIn') {
+                questionInner.classList.remove('slide-in');
+            }
+        });
 
         socket.addEventListener('open', () => {
             socket.send(JSON.stringify({ action: 'join', player: playerName }));
@@ -181,29 +229,57 @@
                 return;
             }
 
-            currentQuestion = payload.question;
-            hasAnswered = false;
-            questionSection.hidden = false;
-            resultSection.hidden = true;
+            const { question_number: number, total_questions: total, question: questionData } = payload;
 
-            const { question_number: number, total_questions: total, question } = payload;
-            questionProgress.textContent = `Вопрос ${number} из ${total}`;
-            const title = question.title || question.text || 'Вопрос';
-            questionTitle.textContent = title;
-            const description = question.description || (question.title ? question.text : '');
-            questionText.textContent = description || '';
+            const applyContent = () => {
+                currentQuestion = questionData;
+                hasAnswered = false;
+                resultSection.hidden = true;
 
-            optionsContainer.innerHTML = '';
-            (question.options || []).forEach((option) => {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.textContent = `${option.id}. ${option.text}`;
-                button.classList.add('btn');
-                button.addEventListener('click', () => sendAnswer(option.id, button));
-                optionsContainer.appendChild(button);
-            });
+                questionProgress.textContent = `Вопрос ${number} из ${total}`;
+                const title = questionData.title || questionData.text || 'Вопрос';
+                questionTitle.textContent = title;
 
-            statusEl.textContent = 'Выберите ответ.';
+                optionsContainer.innerHTML = '';
+                (questionData.options || []).forEach((option) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = `${option.id}. ${option.text}`;
+                    button.classList.add('btn');
+                    button.addEventListener('click', () => sendAnswer(option.id, button));
+                    optionsContainer.appendChild(button);
+                });
+
+                statusEl.textContent = 'Выберите ответ.';
+            };
+
+            const startSlideIn = () => {
+                questionSection.hidden = false;
+                void questionInner.offsetWidth;
+                questionInner.classList.remove('slide-out');
+                questionInner.classList.add('slide-in');
+            };
+
+            if (questionSection.hidden) {
+                applyContent();
+                startSlideIn();
+                return;
+            }
+
+            questionInner.classList.remove('slide-in');
+            questionInner.classList.add('slide-out');
+
+            const handleAnimationEnd = (event) => {
+                if (event.animationName !== 'slideOut') {
+                    return;
+                }
+
+                questionInner.removeEventListener('animationend', handleAnimationEnd);
+                applyContent();
+                startSlideIn();
+            };
+
+            questionInner.addEventListener('animationend', handleAnimationEnd);
         };
 
         const sendAnswer = (answerId, button) => {
@@ -232,6 +308,7 @@
                 return;
             }
 
+            questionInner.classList.remove('slide-in', 'slide-out');
             questionSection.hidden = true;
             resultSection.hidden = false;
 
@@ -247,6 +324,7 @@
         };
 
         const renderFinal = (payload) => {
+            questionInner.classList.remove('slide-in', 'slide-out');
             questionSection.hidden = true;
             resultSection.hidden = false;
             answerSummary.textContent = 'Игра завершена! Итоговый счёт:';
