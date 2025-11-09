@@ -1,0 +1,31 @@
+<section class="game-screen__content lobby-screen">
+  <div class="lobby-screen__header">
+    <h2>Ожидание игроков</h2>
+    <p>Подключайтесь по коду комнаты или отсканируйте QR-код.</p>
+  </div>
+
+  <div class="lobby-screen__grid">
+    <div class="lobby-screen__info">
+      <p class="lobby-screen__label">Код комнаты</p>
+      <p class="lobby-screen__code" data-element="room-code"></p>
+      <a class="lobby-screen__link" data-element="room-link" href="#" target="_blank" rel="noopener"></a>
+
+      <div class="lobby-screen__quiz">
+        <h3 data-element="quiz-title"></h3>
+        <p data-element="quiz-description"></p>
+      </div>
+
+      <button class="btn lobby-screen__start" data-action="start-game" disabled>
+        Начать игру
+      </button>
+    </div>
+
+    <div class="lobby-screen__players">
+      <div class="lobby-screen__qr">
+        <img data-element="room-qr" alt="QR-код" />
+      </div>
+      <h3>Подключившиеся игроки</h3>
+      <ul data-element="players" class="lobby-screen__players-list"></ul>
+    </div>
+  </div>
+</section>
