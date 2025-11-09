@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="screen-mode">
+  <h1>🎬 Экранный режим</h1>
+  <p>
+    Комната создана. Поделитесь кодом и ссылкой, чтобы игроки могли подключиться к игре.
+  </p>
+  <p>
+    Выбрана викторина: <strong>{{ quiz.title }}</strong>
+    {% if quiz.description %}<br />{{ quiz.description }}{% endif %}
+  </p>
+
+  <div id="room-info" class="room-info">
+    <h2>Код комнаты: <span id="room-code">{{ room_id }}</span></h2>
+    <p>
+      Поделитесь ссылкой или QR-кодом для подключения:
+      <a id="room-link" href="{{ join_url }}" target="_blank" rel="noopener">{{ join_url }}</a>
+    </p>
+    <div class="qr-wrapper">
+      <img id="room-qr" alt="QR-код для подключения" />
+    </div>
+    <div class="lobby" id="lobby" hidden>
+      <h3>Подключившиеся игроки</h3>
+      <ul id="players"></ul>
+      <button id="start-game" class="btn" disabled>Начать игру</button>
+    </div>
+    <section id="question-section" class="question" hidden>
+      <header class="question__header">
+        <p id="question-progress"></p>
+        <h3 id="question-title"></h3>
+      </header>
+      <p id="question-text"></p>
+      <ul id="question-options" class="question__options"></ul>
+    </section>
+    <section id="results-section" class="results" hidden>
+      <h3>Результаты</h3>
+      <ul id="results-list"></ul>
+      <h4>Таблица лидеров</h4>
+      <ul id="scoreboard"></ul>
+    </section>
+    <section id="final-section" class="results" hidden>
+      <h3>Финальный счёт</h3>
+      <ul id="final-scoreboard"></ul>
+    </section>
+  </div>
+
+  <p id="room-error" class="error" hidden></p>
+</section>
+
+<script>
+  const roomId = {{ room_id | tojson }};
+  const joinUrl = {{ join_url | tojson }};
+
+  const roomInfo = document.getElementById("room-info");
+  const roomCode = document.getElementById("room-code");
+  const roomLink = document.getElementById("room-link");
+  const roomQr = document.getElementById("room-qr");
+  const roomError = document.getElementById("room-error");
+  const lobby = document.getElementById("lobby");
+  const playersList = document.getElementById("players");
+  const startGameBtn = document.getElementById("start-game");
+  const questionSection = document.getElementById("question-section");
+  const questionProgress = document.getElementById("question-progress");
+  const questionTitle = document.getElementById("question-title");
+  const questionText = document.getElementById("question-text");
+  const questionOptions = document.getElementById("question-options");
+  const resultsSection = document.getElementById("results-section");
+  const resultsList = document.getElementById("results-list");
+  const scoreboardList = document.getElementById("scoreboard");
+  const finalSection = document.getElementById("final-section");
+  const finalScoreboard = document.getElementById("final-scoreboard");
+
+  const buildQrUrl = (url) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+
+  let socket;
+  let gameInProgress = false;
+
+  const connectHostSocket = (id) => {
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    socket = new WebSocket(`${protocol}://${window.location.host}/screen/ws/host/${id}`);
+
+    socket.addEventListener("message", (event) => {
+      const data = JSON.parse(event.data);
+      const { event: eventName, payload } = data;
+
+      switch (eventName) {
+        case "player_joined":
+          renderPlayers(payload.players || []);
+          break;
+        case "show_question":
+          renderQuestion(payload);
+          break;
+        case "show_results":
+          renderResults(payload);
+          break;
+        case "show_final":
+          renderFinal(payload);
+          break;
+        case "error":
+          showError(payload?.message);
+          break;
+        default:
+          break;
+      }
+    });
+
+    socket.addEventListener("open", () => {
+      roomError.hidden = true;
+    });
+
+    socket.addEventListener("close", () => {
+      showError("Соединение с сервером потеряно.");
+    });
+  };
+
+  const showError = (message) => {
+    if (!message) {
+      return;
+    }
+    roomError.textContent = message;
+    roomError.hidden = false;
+  };
+
+  const renderPlayers = (players) => {
+    lobby.hidden = false;
+    playersList.innerHTML = "";
+    players.forEach((player) => {
+      const li = document.createElement("li");
+      li.textContent = player;
+      playersList.appendChild(li);
+    });
+    startGameBtn.disabled = gameInProgress || players.length === 0;
+  };
+
+  const renderQuestion = (payload) => {
+    if (!payload || !payload.question) {
+      return;
+    }
+
+    finalSection.hidden = true;
+    resultsSection.hidden = true;
+    questionSection.hidden = false;
+    gameInProgress = true;
+    startGameBtn.disabled = true;
+
+    const { question, question_number: number, total_questions: total } = payload;
+    questionProgress.textContent = `Вопрос ${number} из ${total}`;
+    const questionTitleText = question.title || question.text || "Вопрос";
+    questionTitle.textContent = questionTitleText;
+    const description = question.description || (question.title ? question.text : "");
+    questionText.textContent = description || "";
+
+    questionOptions.innerHTML = "";
+    (question.options || []).forEach((option) => {
+      const li = document.createElement("li");
+      li.textContent = `${option.id}. ${option.text}`;
+      questionOptions.appendChild(li);
+    });
+  };
+
+  const renderResults = (payload) => {
+    if (!payload) {
+      return;
+    }
+
+    questionSection.hidden = true;
+    resultsSection.hidden = false;
+    finalSection.hidden = true;
+
+    resultsList.innerHTML = "";
+    (payload.results || []).forEach((result) => {
+      const li = document.createElement("li");
+      const status = result.is_correct ? "✅" : "❌";
+      li.textContent = `${status} ${result.player}: ${result.answer ?? "—"} (${result.score})`;
+      resultsList.appendChild(li);
+    });
+
+    renderScoreboard(scoreboardList, payload.scoreboard || []);
+  };
+
+  const renderFinal = (payload) => {
+    gameInProgress = false;
+    finalSection.hidden = false;
+    questionSection.hidden = true;
+    resultsSection.hidden = true;
+
+    renderScoreboard(finalScoreboard, payload.scoreboard || []);
+    startGameBtn.disabled = playersList.children.length === 0;
+  };
+
+  const renderScoreboard = (container, data) => {
+    container.innerHTML = "";
+    data.forEach((item, index) => {
+      const li = document.createElement("li");
+      li.textContent = `${index + 1}. ${item.player} — ${item.score}`;
+      container.appendChild(li);
+    });
+  };
+
+  startGameBtn?.addEventListener("click", () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      showError("Соединение с сервером не установлено.");
+      return;
+    }
+    roomError.hidden = true;
+    socket.send(
+      JSON.stringify({
+        action: "start_game",
+      })
+    );
+    gameInProgress = true;
+    startGameBtn.disabled = true;
+  });
+
+  roomCode.textContent = roomId;
+  roomLink.href = joinUrl;
+  roomLink.textContent = joinUrl;
+  roomQr.src = buildQrUrl(joinUrl);
+  roomInfo.hidden = false;
+  connectHostSocket(roomId);
+</script>
+{% endblock %}
