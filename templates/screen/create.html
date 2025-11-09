@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="screen-mode">
+  <h1>🎬 Экранный режим</h1>
+  <p>Выберите викторину, чтобы создать новую комнату и пригласить игроков.</p>
+
+  {% if quizzes %}
+  <form class="create-room-form" method="post" action="/screen/create-room">
+    <label for="quiz_id">Викторина</label>
+    <select id="quiz_id" name="quiz_id" required>
+      {% for quiz in quizzes %}
+      <option value="{{ quiz.id }}">{{ quiz.title }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Создать комнату</button>
+  </form>
+  {% else %}
+  <p class="error">Нет доступных викторин. Добавьте викторины в базе данных и попробуйте снова.</p>
+  {% endif %}
+</section>
+{% endblock %}

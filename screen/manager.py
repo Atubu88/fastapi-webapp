@@ -12,6 +12,7 @@ class Room:
     """Простая структура данных для хранения информации о комнате."""
 
     room_id: str
+    quiz_id: int | None = None
     players: Dict[str, "Player"] = field(default_factory=dict)
     metadata: Dict[str, str] = field(default_factory=dict)
     events: List[tuple[str, dict | None]] = field(default_factory=list)
@@ -38,8 +39,8 @@ class ScreenRoomManager:
     def __init__(self) -> None:
         self._rooms: Dict[str, Room] = {}
 
-    def create_room(self, room_id: str) -> Room:
-        room = Room(room_id=room_id)
+    def create_room(self, room_id: str, *, quiz_id: int | None = None) -> Room:
+        room = Room(room_id=room_id, quiz_id=quiz_id)
         self._rooms[room_id] = room
         return room
 
