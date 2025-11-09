@@ -5,36 +5,98 @@
     <title>Подключение к игре</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {
-            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-            margin: 0;
-            padding: 2rem;
-            background: #f7f8fa;
-            color: #222;
-        }
+    body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 2rem;
+        background: #f7f8fa;
+        color: #222;
+    }
+
+    .container {
+        max-width: 480px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        padding: 2rem;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+        color: #2563eb;
+    }
+
+    p {
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+
+    #status {
+        font-size: 0.95rem;
+        color: #64748b;
+    }
+
+    /* ===================== */
+    /* 🎨 Современные кнопки */
+    /* ===================== */
+
+    #options {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 1.5rem;
+    }
+
+    .btn {
+        display: block;
+        width: 100%;
+        padding: 14px 18px;
+        font-size: 1.1rem;
+        border: none;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #4a90e2, #6cc1ff);
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.3s;
+    }
+
+    .btn:hover {
+        transform: scale(1.03);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        background: linear-gradient(135deg, #5aa8ff, #84d1ff);
+    }
+
+    .btn:active {
+        transform: scale(0.98);
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn.selected {
+        background: linear-gradient(135deg, #22c55e, #4ade80);
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        color: white;
+    }
+
+    /* 📱 Мобильная адаптация */
+    @media (max-width: 600px) {
         .container {
-            max-width: 480px;
-            margin: 0 auto;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-            padding: 2rem;
-            text-align: center;
+            padding: 1.5rem 1rem;
         }
-        h1 {
-            font-size: 1.8rem;
-            margin-bottom: 1rem;
-            color: #2563eb;
+        .btn {
+            font-size: 1rem;
+            padding: 12px;
         }
-        p {
-            margin-bottom: 1.5rem;
-            line-height: 1.5;
-        }
-        #status {
-            font-size: 0.95rem;
-            color: #64748b;
-        }
-    </style>
+    }
+</style>
+
 </head>
 <body>
     <div class="container">
