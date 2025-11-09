@@ -62,6 +62,21 @@ async def create_room(request: Request, quiz_id: int = Form(...)) -> HTMLRespons
     return templates.TemplateResponse("screen/room.html", context)
 
 
+@router.get("/fragments/{state}", response_class=HTMLResponse, name="screen:fragment")
+async def screen_fragment(request: Request, state: str) -> HTMLResponse:
+    template_map: dict[str, str] = {
+        "lobby": "screen/lobby.html",
+        "question": "screen/question.html",
+        "final": "screen/final.html",
+    }
+
+    template_name = template_map.get(state)
+    if template_name is None:
+        raise HTTPException(status_code=404, detail="Неизвестный экран")
+
+    return templates.TemplateResponse(template_name, {"request": request})
+
+
 @router.get("/join", response_class=HTMLResponse, name="screen:join")
 async def join_room_get(request: Request, code: str) -> HTMLResponse:
     return templates.TemplateResponse(
