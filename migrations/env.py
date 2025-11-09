@@ -8,7 +8,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from webapp.db.models import Base
+from core.models import Base
 
 config = context.config
 
@@ -16,17 +16,16 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # --- теперь DATABASE_URL точно подхватится ---
-database_url = os.getenv("DATABASE_URL")
+database_url = os.getenv("SYNC_DATABASE_URL")
 if not database_url:
     try:
-        from webapp.config import get_database_url
-        app_database_url = get_database_url()
+        from core.database import DATABASE_URL as app_database_url
     except Exception:
         app_database_url = None
     database_url = app_database_url
 
 if not database_url:
-    raise RuntimeError("DATABASE_URL environment variable must be set for Alembic migrations.")
+    raise RuntimeError("SYNC_DATABASE_URL environment variable must be set for Alembic migrations.")
 
 config.set_main_option("sqlalchemy.url", database_url)
 target_metadata = Base.metadata
