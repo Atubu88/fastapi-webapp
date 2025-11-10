@@ -1,5 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
+import logging
+import os
 
 from core.config import ADMIN_ID, TEMPLATES_DIR
 from core.telegram import validate_init_data
@@ -7,16 +10,10 @@ from core.telegram import validate_init_data
 router = APIRouter(tags=["main"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-from fastapi.responses import RedirectResponse
-
-
-
-import logging
 
 def _extract_user_id(request: Request) -> int | None:
-    logging.debug("🔍 Вызов _extract_user_id()")
-
     """Попытаться извлечь telegram_id пользователя из заголовков запроса."""
+    logging.debug("🔍 Вызов _extract_user_id()")
 
     header_candidates = (
         "X-Telegram-Web-App-Init-Data",
@@ -29,7 +26,7 @@ def _extract_user_id(request: Request) -> int | None:
             logging.debug(f"🔹 Header {header} отсутствует.")
             continue
 
-        logging.debug(f"📦 Найден {header}: {init_data[:80]}...")  # первые 80 символов, чтобы не засорять логи
+        logging.debug(f"📦 Найден {header}: {init_data[:80]}...")
 
         try:
             payload = validate_init_data(init_data)
@@ -40,7 +37,6 @@ def _extract_user_id(request: Request) -> int | None:
 
         user = payload.get("user") or {}
         user_id = user.get("id")
-
         logging.debug(f"👤 Извлечён user_id={user_id}")
 
         if user_id is None:
@@ -59,10 +55,10 @@ def _extract_user_id(request: Request) -> int | None:
 @router.get("/", name="index")
 async def index(request: Request):
     """
-    Отображает выбор режима или перенаправляет в комнату,
-    если Mini App открыт по ссылке ?tgWebAppStartParam=join_<код>
+    Главная страница: выбор режима игры.
+    Если Mini App открыт через ссылку ?tgWebAppStartParam=join_<код>,
+    сразу перенаправляем в комнату.
     """
-    # Telegram передаёт параметр как tgWebAppStartParam, а не startapp
     start_param = (
         request.query_params.get("startapp")
         or request.query_params.get("tgWebAppStartParam")
@@ -89,8 +85,15 @@ async def index(request: Request):
             "desc": "Играй сам и побей свой рекорд!"
         },
     ]
+
+    # 🧩 Проверяем пользователя
     user_id = _extract_user_id(request)
     is_admin = bool(ADMIN_ID and user_id == ADMIN_ID)
+
+    # 🔧 Режим разработчика (всегда показывать админку)
+    if os.getenv("DEBUG_SHOW_ADMIN") == "1":
+        is_admin = True
+        logging.debug("🧑‍💻 DEBUG_SHOW_ADMIN активен — админка видна всем пользователям.")
 
     context = {
         "request": request,

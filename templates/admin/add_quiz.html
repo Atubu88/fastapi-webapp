@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="container">
+  <h1 class="title">➕ Добавить викторину</h1>
+
+  {% if message %}
+  <div class="message">{{ message }}</div>
+  {% endif %}
+
+  <form method="post">
+    <textarea name="content" rows="22" placeholder="Вставь сюда весь текст викторины (вместе с Тема: ...)" required></textarea>
+    <button type="submit" class="btn">💾 Сохранить</button>
+  </form>
+</section>
+
+<style>
+  textarea {
+    width: 100%;
+    font-family: monospace;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    resize: vertical;
+  }
+  .btn {
+    margin-top: 12px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .message {
+    margin-bottom: 10px;
+    color: green;
+  }
+</style>
+{% endblock %}

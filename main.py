@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from screen import screen_router
-
+from routers.admin import add_quiz
 from core.config import STATIC_DIR, TEMPLATES_DIR, get_bot_token
 from routers.auth import router as auth_router
 from routers.main_router import router as main_router  # 👈 главный интерфейс (index и выбор режима)
@@ -23,6 +23,7 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 app.include_router(auth_router)
 app.include_router(main_router)
 app.include_router(screen_router)
+app.include_router(add_quiz.router)
 
 # ------------------ Проверка Telegram токена ------------------
 
