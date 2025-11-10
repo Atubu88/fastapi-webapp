@@ -141,11 +141,17 @@ main {
 .game-screen__content {
   background: #ffffff;
   border-radius: 28px;
-  padding: 2.5rem;
+  padding: 3rem 3.5rem;   /* было 2.5rem — увеличили внутренние отступы */
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.15);
   opacity: 0;
   transform: translateY(32px);
+
+  width: 90%;             /* растянуть карточку */
+  max-width: 1000px;      /* но не больше 1000 пикселей */
+  margin: 0 auto;         /* по центру экрана */
+  font-size: 1.15rem;     /* чуть крупнее текст внутри */
 }
+
 
 .game-screen__content.is-visible {
   animation: screenFadeIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
