@@ -12,7 +12,6 @@
     roomId: container.dataset.roomId || "",
     joinUrl: container.dataset.joinUrl || "",
     quizTitle: container.dataset.quizTitle || "",
-    quizDescription: container.dataset.quizDescription || "",
   };
 
   const templateCache = new Map();
@@ -126,7 +125,6 @@
       const linkEl = root.querySelector('[data-element="room-link"]');
       const qrEl = root.querySelector('[data-element="room-qr"]');
       const quizTitleEl = root.querySelector('[data-element="quiz-title"]');
-      const quizDescEl = root.querySelector('[data-element="quiz-description"]');
       const playersEl = root.querySelector('[data-element="players"]');
       const startBtn = root.querySelector('[data-action="start-game"]');
 
@@ -143,10 +141,6 @@
       }
       if (quizTitleEl) {
         quizTitleEl.textContent = roomConfig.quizTitle;
-      }
-      if (quizDescEl) {
-        quizDescEl.textContent = roomConfig.quizDescription;
-        quizDescEl.hidden = !roomConfig.quizDescription;
       }
 
       if (playersEl) {
