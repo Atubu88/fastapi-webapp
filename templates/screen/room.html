@@ -5,7 +5,6 @@
 
   <p>
     Выбрана викторина: <strong>{{ quiz.title }}</strong>
-    {% if quiz.description %}<br />{{ quiz.description }}{% endif %}
   </p>
 
   <div
@@ -14,7 +13,6 @@
     data-room-id="{{ room_id }}"
     data-join-url="{{ join_url }}"
     data-quiz-title="{{ quiz.title }}"
-    data-quiz-description="{{ quiz.description or '' }}"
   ></div>
 
   <p id="room-error" class="error" hidden></p>
