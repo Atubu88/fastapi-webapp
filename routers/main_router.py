@@ -11,7 +11,11 @@ from fastapi.responses import RedirectResponse
 
 
 
+import logging
+
 def _extract_user_id(request: Request) -> int | None:
+    logging.debug("🔍 Вызов _extract_user_id()")
+
     """Попытаться извлечь telegram_id пользователя из заголовков запроса."""
 
     header_candidates = (
@@ -22,24 +26,33 @@ def _extract_user_id(request: Request) -> int | None:
     for header in header_candidates:
         init_data = request.headers.get(header)
         if not init_data:
+            logging.debug(f"🔹 Header {header} отсутствует.")
             continue
+
+        logging.debug(f"📦 Найден {header}: {init_data[:80]}...")  # первые 80 символов, чтобы не засорять логи
 
         try:
             payload = validate_init_data(init_data)
-        except HTTPException:
-            # Если данные не валидны — пропускаем и пробуем следующий заголовок.
+            logging.debug(f"✅ Валидация прошла успешно: {payload}")
+        except HTTPException as e:
+            logging.warning(f"⚠️ Ошибка валидации {header}: {e}")
             continue
 
         user = payload.get("user") or {}
         user_id = user.get("id")
+
+        logging.debug(f"👤 Извлечён user_id={user_id}")
+
         if user_id is None:
             continue
 
         try:
             return int(user_id)
         except (TypeError, ValueError):
+            logging.error(f"❌ Ошибка преобразования user_id={user_id} → int")
             continue
 
+    logging.debug("🚫 Telegram ID не найден ни в одном заголовке.")
     return None
 
 
