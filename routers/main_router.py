@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from core.config import TEMPLATES_DIR
+from core.config import TEMPLATES_DIR, ADMIN_ID  # ✅ добавили ADMIN_ID
 
 router = APIRouter(tags=["main"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
-
-from fastapi.responses import RedirectResponse
-
 
 
 @router.get("/", name="index")
@@ -25,6 +23,9 @@ async def index(request: Request):
         code = start_param.replace("join_", "")
         return RedirectResponse(url=f"/screen/join?code={code}")
 
+    # Получаем пользователя из сессии (если уже сохранён)
+    user = request.session.get("user")
+
     modes = [
         {
             "id": "screen",
@@ -42,4 +43,13 @@ async def index(request: Request):
             "desc": "Играй сам и побей свой рекорд!"
         },
     ]
-    return templates.TemplateResponse("index.html", {"request": request, "modes": modes})
+
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "modes": modes,
+            "user": user,
+            "admin_id": ADMIN_ID,  # ✅ передаём ID администратора в шаблон
+        },
+    )

@@ -13,5 +13,7 @@ def get_bot_token() -> str:
         raise RuntimeError("BOT_TOKEN is not set")
     return token
 
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
