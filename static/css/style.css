@@ -46,6 +46,17 @@ main {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
+.mode-card--admin {
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  background:
+    linear-gradient(140deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.08)),
+    #fff;
+}
+
+.mode-card--admin:hover {
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.25);
+}
+
 .mode-card .emoji {
   font-size: 2rem;
   margin-right: 0.75rem;

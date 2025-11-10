@@ -1,12 +1,46 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.templating import Jinja2Templates
-from core.config import TEMPLATES_DIR
+
+from core.config import ADMIN_ID, TEMPLATES_DIR
+from core.telegram import validate_init_data
 
 router = APIRouter(tags=["main"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 from fastapi.responses import RedirectResponse
 
+
+
+def _extract_user_id(request: Request) -> int | None:
+    """Попытаться извлечь telegram_id пользователя из заголовков запроса."""
+
+    header_candidates = (
+        "X-Telegram-Web-App-Init-Data",
+        "X-Telegram-Init-Data",
+    )
+
+    for header in header_candidates:
+        init_data = request.headers.get(header)
+        if not init_data:
+            continue
+
+        try:
+            payload = validate_init_data(init_data)
+        except HTTPException:
+            # Если данные не валидны — пропускаем и пробуем следующий заголовок.
+            continue
+
+        user = payload.get("user") or {}
+        user_id = user.get("id")
+        if user_id is None:
+            continue
+
+        try:
+            return int(user_id)
+        except (TypeError, ValueError):
+            continue
+
+    return None
 
 
 @router.get("/", name="index")
@@ -42,4 +76,13 @@ async def index(request: Request):
             "desc": "Играй сам и побей свой рекорд!"
         },
     ]
-    return templates.TemplateResponse("index.html", {"request": request, "modes": modes})
+    user_id = _extract_user_id(request)
+    is_admin = bool(ADMIN_ID and user_id == ADMIN_ID)
+
+    context = {
+        "request": request,
+        "modes": modes,
+        "is_admin": is_admin,
+    }
+
+    return templates.TemplateResponse("index.html", context)
