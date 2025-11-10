@@ -12,6 +12,15 @@
       </div>
     </a>
     {% endfor %}
+    {% if is_admin %}
+    <a class="mode-card mode-card--admin" href="/admin">
+      <div class="emoji">🛠️</div>
+      <div class="info">
+        <h2>Админка</h2>
+        <p>Управление играми и настройками сервиса.</p>
+      </div>
+    </a>
+    {% endif %}
   </div>
 </section>
 {% endblock %}
