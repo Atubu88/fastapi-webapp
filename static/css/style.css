@@ -358,24 +358,31 @@ main {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .question-screen__option {
-  backdrop-filter: blur(8px);
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 18px;
-  padding: 1.2rem 1.4rem;
-  font-size: 1.1rem;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+  padding: 1.9rem 2.25rem;
+  font-size: 1.6rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  box-shadow: 0 18px 36px rgba(79, 70, 229, 0.18);
+  gap: 1.4rem;
+  box-shadow: 0 22px 44px rgba(79, 70, 229, 0.22);
+  min-height: 5.5rem;
 }
 
 @media (max-width: 768px) {
   .question-screen__options {
     grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+
+  .question-screen__option {
+    font-size: 1.35rem;
+    padding: 1.6rem 1.9rem;
   }
 }
 
