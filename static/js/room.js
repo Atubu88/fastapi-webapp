@@ -21,6 +21,96 @@
   let players = [];
   let lastQuestionContext = null;
 
+  const serverClock = {
+    offset: 0,
+    sync(serverTimeIso) {
+      if (!serverTimeIso) {
+        return;
+      }
+      const serverTimestamp = Date.parse(serverTimeIso);
+      if (Number.isNaN(serverTimestamp)) {
+        return;
+      }
+      const localNow = Date.now();
+      this.offset = serverTimestamp - localNow;
+    },
+    now() {
+      return Date.now() + this.offset;
+    },
+  };
+
+  const countdownTimer = (() => {
+    let timerId = null;
+    let endTime = 0;
+    let element = null;
+
+    const cancelTimer = () => {
+      if (timerId !== null) {
+        window.clearInterval(timerId);
+        timerId = null;
+      }
+    };
+
+    const render = () => {
+      if (!element || !endTime) {
+        cancelTimer();
+        return;
+      }
+
+      const remaining = endTime - serverClock.now();
+      if (remaining <= 0) {
+        element.textContent = "00:00";
+        element.classList.add("is-warning");
+        cancelTimer();
+        return;
+      }
+
+      const totalSeconds = Math.max(0, Math.ceil(remaining / 1000));
+      const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+      const seconds = String(totalSeconds % 60).padStart(2, "0");
+      element.textContent = `${minutes}:${seconds}`;
+      if (totalSeconds <= 10) {
+        element.classList.add("is-warning");
+      } else {
+        element.classList.remove("is-warning");
+      }
+    };
+
+    return {
+      start(targetElement, startIso, durationSeconds) {
+        element = targetElement ?? null;
+        if (!element) {
+          this.clear();
+          return;
+        }
+
+        const start = Date.parse(startIso);
+        const duration = Number(durationSeconds);
+        if (Number.isNaN(start) || !duration || duration <= 0) {
+          this.clear();
+          return;
+        }
+
+        endTime = start + duration * 1000;
+        element.hidden = false;
+        element.classList.remove("is-warning");
+        cancelTimer();
+        render();
+        timerId = window.setInterval(render, 250);
+      },
+      clear() {
+        cancelTimer();
+        endTime = 0;
+        if (element) {
+          element.textContent = "00:00";
+          element.hidden = true;
+          element.classList.remove("is-warning");
+        }
+        element = null;
+      },
+    };
+  })();
+
   const buildQrUrl = (url) =>
     `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
 
@@ -116,6 +206,7 @@
 
   const stateHandlers = {
     lobby(data) {
+      countdownTimer.clear();
       const root = container.querySelector(".lobby-screen");
       if (!root) {
         return;
@@ -163,6 +254,7 @@
     question(data) {
       const root = container.querySelector(".question-screen");
       if (!root) {
+        countdownTimer.clear();
         return;
       }
 
@@ -173,6 +265,7 @@
       const resultsSection = root.querySelector('[data-section="results"]');
       const answersList = root.querySelector('[data-element="answers"]');
       const scoreboardList = root.querySelector('[data-element="scoreboard"]');
+      const timerEl = root.querySelector('[data-element="timer"]');
 
       if (data.question) {
         const { question, question_number: number, total_questions: total } = data;
@@ -230,12 +323,32 @@
         }
       }
 
+      const startedAt = data?.question_started_at;
+      const duration = data?.question_duration;
+      const serverTime = data?.server_time;
+      if (serverTime) {
+        serverClock.sync(serverTime);
+      } else if (startedAt) {
+        serverClock.sync(startedAt);
+      }
+
       if (resultsSection) {
         if (data.results) {
           resultsSection.classList.add("is-visible");
         } else {
           resultsSection.classList.remove("is-visible");
         }
+      }
+
+      if (timerEl) {
+        if (data.results || !startedAt || !duration) {
+          countdownTimer.clear();
+          timerEl.hidden = true;
+        } else {
+          countdownTimer.start(timerEl, startedAt, duration);
+        }
+      } else if (data.results || !startedAt || !duration) {
+        countdownTimer.clear();
       }
 
       if (answersList) {
@@ -259,6 +372,10 @@
       }
     },
     final(data) {
+      countdownTimer.clear();
+      if (data?.server_time) {
+        serverClock.sync(data.server_time);
+      }
       const root = container.querySelector(".final-screen");
       if (!root) {
         return;

@@ -47,6 +47,10 @@ class ScreenRoomManager:
     def __init__(self) -> None:
         self._rooms: Dict[str, Room] = {}
 
+    @staticmethod
+    def _current_time_iso() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
     def create_room(self, room_id: str, *, quiz_id: int | None = None) -> Room:
         room = Room(room_id=room_id, quiz_id=quiz_id)
         self._rooms[room_id] = room
@@ -209,6 +213,7 @@ class ScreenRoomManager:
         room.question_duration = None
         scoreboard = self._build_scoreboard(room)
         payload = {"scoreboard": scoreboard}
+        payload["server_time"] = self._current_time_iso()
         await self.broadcast(room.room_id, "show_final", payload)
 
     def _build_question_payload(self, room: Room) -> Dict:
@@ -229,6 +234,7 @@ class ScreenRoomManager:
             payload["question_started_at"] = room.question_started_at.isoformat()
         if room.question_duration is not None:
             payload["question_duration"] = room.question_duration
+        payload["server_time"] = self._current_time_iso()
         return payload
 
     def _build_results_payload(self, room: Room) -> Dict:
@@ -262,6 +268,7 @@ class ScreenRoomManager:
             payload["question_started_at"] = room.question_started_at.isoformat()
         if room.question_duration is not None:
             payload["question_duration"] = room.question_duration
+        payload["server_time"] = self._current_time_iso()
         return payload
 
     def _build_scoreboard(self, room: Room) -> List[Dict[str, str | int]]:
