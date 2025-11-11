@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
+
+import asyncio
+
+DEFAULT_QUESTION_DURATION = 30
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
@@ -22,6 +27,9 @@ class Room:
     scores: Dict[str, int] = field(default_factory=dict)
     questions: List[dict] = field(default_factory=list)
     current_question_index: int = -1
+    question_started_at: Optional[datetime] = None
+    question_duration: Optional[int] = None
+    question_timeout_task: Optional[asyncio.Task[None]] = None
 
 
 @dataclass
@@ -147,17 +155,29 @@ class ScreenRoomManager:
         if room is None:
             return
 
+        self._cancel_question_timer(room)
         room.current_question_index += 1
         room.answers.clear()
         for player in room.players.values():
             player.answered = False
 
         if room.current_question_index >= len(room.questions):
+            room.question_started_at = None
+            room.question_duration = None
             await self._broadcast_final(room)
             return
 
+        question = room.questions[room.current_question_index]
+        duration = self._extract_question_duration(question)
+        room.question_duration = duration
+        room.question_started_at = datetime.now(timezone.utc)
         payload = self._build_question_payload(room)
         await self.broadcast(room_id, "show_question", payload)
+
+        if duration:
+            room.question_timeout_task = asyncio.create_task(
+                self._handle_question_timeout(room, duration)
+            )
 
     async def submit_answer(self, room_id: str, player_name: str, answer: str) -> None:
         room = self.get_room(room_id)
@@ -175,11 +195,15 @@ class ScreenRoomManager:
             await self._handle_all_answers(room)
 
     async def _handle_all_answers(self, room: Room) -> None:
+        self._cancel_question_timer(room)
         payload = self._build_results_payload(room)
         await self.broadcast(room.room_id, "show_results", payload)
         await self.show_next_question(room.room_id)
 
     async def _broadcast_final(self, room: Room) -> None:
+        self._cancel_question_timer(room)
+        room.question_started_at = None
+        room.question_duration = None
         scoreboard = self._build_scoreboard(room)
         payload = {"scoreboard": scoreboard}
         await self.broadcast(room.room_id, "show_final", payload)
@@ -198,6 +222,10 @@ class ScreenRoomManager:
         }
         if "options" in question:
             payload["question"]["options"] = question["options"]
+        if room.question_started_at is not None:
+            payload["question_started_at"] = room.question_started_at.isoformat()
+        if room.question_duration is not None:
+            payload["question_duration"] = room.question_duration
         return payload
 
     def _build_results_payload(self, room: Room) -> Dict:
@@ -227,6 +255,10 @@ class ScreenRoomManager:
             "results": results,
             "scoreboard": self._build_scoreboard(room),
         }
+        if room.question_started_at is not None:
+            payload["question_started_at"] = room.question_started_at.isoformat()
+        if room.question_duration is not None:
+            payload["question_duration"] = room.question_duration
         return payload
 
     def _build_scoreboard(self, room: Room) -> List[Dict[str, str | int]]:
@@ -236,6 +268,50 @@ class ScreenRoomManager:
         ]
         scoreboard.sort(key=lambda item: (-int(item["score"]), item["player"]))
         return scoreboard
+
+    async def _handle_question_timeout(self, room: Room, duration: int) -> None:
+        try:
+            await asyncio.sleep(duration)
+            # Если вопрос уже сменился — ничего не делаем.
+            if room.question_timeout_task is not asyncio.current_task():
+                return
+
+            for player in room.players.values():
+                if not player.answered:
+                    room.answers.setdefault(player.name, None)
+                    player.answered = True
+
+            payload = self._build_results_payload(room)
+            await self.broadcast(room.room_id, "show_results", payload)
+            await self.show_next_question(room.room_id)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if room.question_timeout_task is asyncio.current_task():
+                room.question_timeout_task = None
+
+    def _cancel_question_timer(self, room: Room) -> None:
+        task = room.question_timeout_task
+        if task is not None:
+            current = asyncio.current_task()
+            if task is not current:
+                task.cancel()
+        room.question_timeout_task = None
+
+    def _extract_question_duration(self, question: Dict) -> Optional[int]:
+        """Получить время на ответ в секундах из вопроса."""
+
+        for key in ("timer", "time_limit", "duration", "question_duration"):
+            raw_value = question.get(key)
+            if raw_value is None:
+                continue
+            try:
+                value = int(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+        return DEFAULT_QUESTION_DURATION
 
     async def _send_json(
         self, websocket: WebSocket | None, event: str, payload: Dict | None
