@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import secrets
 import string
 from typing import Any
 
-from fastapi import APIRouter, Form, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Form,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -17,6 +26,7 @@ router = APIRouter(prefix="/screen", tags=["screen"])
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "victorina2024_bot")
+logger = logging.getLogger(__name__)
 
 
 def _generate_room_id(length: int = 6) -> str:
@@ -26,6 +36,18 @@ def _generate_room_id(length: int = 6) -> str:
 
 def _build_join_url(room_id: str) -> str:
     return f"https://t.me/{BOT_USERNAME}?startapp=join_{room_id}"
+
+
+async def _preload_room_questions(room_id: str, quiz_id: int) -> None:
+    try:
+        questions = await asyncio.to_thread(get_quiz_questions, quiz_id)
+    except Exception:  # pragma: no cover - защитный код
+        logger.exception("Failed to preload quiz questions", extra={"room_id": room_id})
+        return
+
+    room = room_manager.get_room(room_id)
+    if room is not None:
+        room.questions = questions
 
 
 @router.get("", name="screen:index")
@@ -45,12 +67,14 @@ async def screen_create(request: Request) -> HTMLResponse:
 
 @router.post("/create-room", response_class=HTMLResponse, name="screen:create_room")
 async def create_room(request: Request, quiz_id: int = Form(...)) -> HTMLResponse:
-    quiz = get_quiz_details(quiz_id)
+    quiz = await asyncio.to_thread(get_quiz_details, quiz_id)
     if quiz is None:
         raise HTTPException(status_code=404, detail="Викторина не найдена")
 
     room_id = _generate_room_id()
     room_manager.create_room(room_id, quiz_id=quiz_id)
+
+    asyncio.create_task(_preload_room_questions(room_id, quiz_id))
 
     join_url = _build_join_url(room_id)
     context: dict[str, Any] = {
@@ -141,31 +165,36 @@ async def ws_host(websocket: WebSocket, room_id: str) -> None:
                     )
                     continue
 
-                try:
-                    questions = get_quiz_questions(room.quiz_id)
-                except Exception:
+                if not room.questions:
+                    try:
+                        questions = await asyncio.to_thread(
+                            get_quiz_questions, room.quiz_id
+                        )
+                    except Exception:
+                        await websocket.send_json(
+                            {
+                                "event": "error",
+                                "payload": {
+                                    "message": "Не удалось загрузить вопросы викторины.",
+                                },
+                            }
+                        )
+                        continue
+                    room.questions = questions
+
+                if not room.questions:
                     await websocket.send_json(
                         {
                             "event": "error",
                             "payload": {
-                                "message": "Не удалось загрузить вопросы викторины."
+                                "message": "В выбранной викторине нет вопросов.",
                             },
                         }
                     )
                     continue
 
-                if not questions:
-                    await websocket.send_json(
-                        {
-                            "event": "error",
-                            "payload": {
-                                "message": "В выбранной викторине нет вопросов."
-                            },
-                        }
-                    )
-                    continue
+                await room_manager.start_game(room_id, room.questions)
 
-                await room_manager.start_game(room_id, questions)
             elif action == "show_question":
                 await room_manager.show_next_question(room_id)
             else:
