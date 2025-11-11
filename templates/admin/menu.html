@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="container admin-menu">
+  <h1 class="title">🔐 Админ-панель</h1>
+  <p class="subtitle">Выбери раздел для работы</p>
+  <div class="menu-grid">
+    <a href="/admin/add_quiz" class="menu-card">
+      <span class="emoji">🎯</span>
+      <span class="label">Управление викторинами</span>
+    </a>
+    <button class="menu-card disabled" disabled>
+      <span class="emoji">🧑‍🤝‍🧑</span>
+      <span class="label">Управление пользователями</span>
+      <span class="soon">скоро</span>
+    </button>
+    <button class="menu-card disabled" disabled>
+      <span class="emoji">📊</span>
+      <span class="label">Статистика</span>
+      <span class="soon">скоро</span>
+    </button>
+  </div>
+</section>
+
+<style>
+  .admin-menu {
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  .admin-menu .title {
+    font-size: 2rem;
+    margin-bottom: 8px;
+  }
+
+  .admin-menu .subtitle {
+    color: #6b7280;
+    margin-bottom: 32px;
+  }
+
+  .menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .menu-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    border-radius: 16px;
+    border: none;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    text-decoration: none;
+    font-size: 1.1rem;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .menu-card .emoji {
+    font-size: 2.5rem;
+  }
+
+  .menu-card:hover:not(.disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 28px rgba(37, 99, 235, 0.25);
+  }
+
+  .menu-card.disabled {
+    background: #e5e7eb;
+    color: #9ca3af;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .menu-card.disabled .emoji {
+    filter: grayscale(100%);
+  }
+
+  .menu-card .soon {
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 640px) {
+    .admin-menu {
+      padding: 24px 12px;
+    }
+
+    .menu-card {
+      padding: 20px;
+    }
+  }
+</style>
+{% endblock %}

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from core.config import TEMPLATES_DIR
 from core.models import Quiz, Question, Option
@@ -11,9 +11,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-@router.get("/", response_class=RedirectResponse)
-async def admin_root():
-    return RedirectResponse(url="/admin/add_quiz")
+@router.get("/", response_class=HTMLResponse)
+async def admin_root(request: Request):
+    return templates.TemplateResponse("admin/menu.html", {"request": request})
 
 
 @router.get("/add_quiz", response_class=HTMLResponse)
