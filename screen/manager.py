@@ -120,8 +120,11 @@ class ScreenRoomManager:
             targets.append(room.screen)
         targets.extend(room.sockets.values())
 
-        for websocket in list(targets):
-            await self._send_json(websocket, event, payload)
+        # 🔥 Параллельная рассылка всем
+        await asyncio.gather(
+            *(self._send_json(ws, event, payload) for ws in targets),
+            return_exceptions=True  # не прерывает, если один сокет уже закрылся
+        )
 
     async def notify_player_joined(self, room_id: str, player: Player) -> None:
         room = self.get_room(room_id)
