@@ -654,24 +654,10 @@
         quizTitleEl.textContent = roomConfig.quizTitle;
       }
 
-      if (scoreboardList) {
+      if (scoreboardList && window.Leaderboard) {
+        window.Leaderboard.render(scoreboardList, data.scoreboard || []);
+      } else if (scoreboardList) {
         scoreboardList.innerHTML = "";
-        (data.scoreboard || []).forEach((entry, index) => {
-          const li = document.createElement("li");
-          if (entry.has_fastest_record) {
-            li.classList.add("is-record");
-          }
-          const meta = buildScoreboardMeta(entry);
-          li.innerHTML = `
-            <span class="final-screen__position">${index + 1}</span>
-            <span class="final-screen__name">${entry.player}</span>
-            <span class="final-screen__score">
-              <span class="final-screen__score-value">${entry.score}</span>
-              <span class="scoreboard__meta">${meta}</span>
-            </span>
-          `.trim();
-          scoreboardList.appendChild(li);
-        });
       }
 
       if (recordValueEl) {
