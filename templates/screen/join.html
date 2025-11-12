@@ -50,6 +50,33 @@
       margin-top: 0.6rem;
     }
 
+    .question-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+      flex-wrap: wrap;
+    }
+
+    .question-timer {
+      margin: 0;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.12);
+      color: #1d4ed8;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .question-timer.is-warning {
+      background: rgba(248, 113, 113, 0.16);
+      color: #dc2626;
+    }
+
     .question-inner {
       display: flex;
       flex-direction: column;
@@ -161,7 +188,10 @@
 
     <section id="question" hidden>
       <div id="question-inner" class="question-inner">
-        <p id="question-progress"></p>
+        <div class="question-meta">
+          <p id="question-progress"></p>
+          <p id="question-timer" class="question-timer" hidden>00:00</p>
+        </div>
         <h2 id="question-title"></h2>
         <div id="options"></div>
       </div>
@@ -185,6 +215,7 @@
     const questionSection = document.getElementById('question');
     const questionInner = document.getElementById('question-inner');
     const questionProgress = document.getElementById('question-progress');
+    const questionTimer = document.getElementById('question-timer');
     const questionTitle = document.getElementById('question-title');
     const optionsContainer = document.getElementById('options');
     const resultSection = document.getElementById('result');
@@ -193,6 +224,74 @@
 
     let hasAnswered = false;
     let currentQuestion = null;
+    let serverTimeOffset = 0;
+    let timerIntervalId = null;
+    let timerEndTime = 0;
+
+    const syncServerTime = (isoString) => {
+      if (!isoString) return;
+      const serverTimestamp = Date.parse(isoString);
+      if (Number.isNaN(serverTimestamp)) return;
+      serverTimeOffset = serverTimestamp - Date.now();
+    };
+
+    const getServerNow = () => Date.now() + serverTimeOffset;
+
+    const clearTimerInterval = () => {
+      if (timerIntervalId) {
+        window.clearInterval(timerIntervalId);
+        timerIntervalId = null;
+      }
+    };
+
+    const hideQuestionTimer = () => {
+      clearTimerInterval();
+      timerEndTime = 0;
+      if (!questionTimer) return;
+      questionTimer.textContent = '00:00';
+      questionTimer.hidden = true;
+      questionTimer.setAttribute('hidden', '');
+      questionTimer.setAttribute('aria-hidden', 'true');
+      questionTimer.classList.remove('is-warning');
+    };
+
+    const renderQuestionTimer = () => {
+      if (!questionTimer || !timerEndTime) {
+        clearTimerInterval();
+        return;
+      }
+      const remaining = timerEndTime - getServerNow();
+      if (remaining <= 0) {
+        questionTimer.textContent = '00:00';
+        questionTimer.classList.add('is-warning');
+        clearTimerInterval();
+        return;
+      }
+      const totalSeconds = Math.max(0, Math.ceil(remaining / 1000));
+      const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+      const seconds = String(totalSeconds % 60).padStart(2, '0');
+      questionTimer.textContent = `${minutes}:${seconds}`;
+      if (totalSeconds <= 10) questionTimer.classList.add('is-warning');
+      else questionTimer.classList.remove('is-warning');
+    };
+
+    const startQuestionTimer = (startedAt, durationSeconds) => {
+      if (!questionTimer) return;
+      const start = Date.parse(startedAt);
+      const duration = Number(durationSeconds);
+      if (Number.isNaN(start) || !duration || duration <= 0) {
+        hideQuestionTimer();
+        return;
+      }
+      timerEndTime = start + duration * 1000;
+      questionTimer.hidden = false;
+      questionTimer.removeAttribute('hidden');
+      questionTimer.setAttribute('aria-hidden', 'false');
+      questionTimer.classList.remove('is-warning');
+      renderQuestionTimer();
+      clearTimerInterval();
+      timerIntervalId = window.setInterval(renderQuestionTimer, 250);
+    };
 
     questionInner.addEventListener('animationend', (event) => {
       if (event.animationName === 'slideIn') {
@@ -226,7 +325,18 @@
     });
 
     const renderQuestion = (payload) => {
-      if (!payload || !payload.question) return;
+      if (!payload) return;
+
+      const startedAt = payload.question_started_at;
+      const duration = payload.question_duration;
+      const serverTime = payload.server_time;
+      if (serverTime) syncServerTime(serverTime);
+      else if (startedAt) syncServerTime(startedAt);
+
+      if (!payload.question) {
+        hideQuestionTimer();
+        return;
+      }
 
       const { question_number: number, total_questions: total, question: questionData } = payload;
 
@@ -249,6 +359,12 @@
         });
 
         statusEl.textContent = 'Выберите ответ.';
+
+        if (startedAt && duration) {
+          startQuestionTimer(startedAt, duration);
+        } else {
+          hideQuestionTimer();
+        }
       };
 
       const startSlideIn = () => {
@@ -295,6 +411,8 @@
 
     const renderResults = (payload) => {
       if (!payload) return;
+      if (payload.server_time) syncServerTime(payload.server_time);
+      hideQuestionTimer();
       questionSection.hidden = true;
       resultSection.hidden = false;
 
@@ -307,6 +425,8 @@
     };
 
     const renderFinal = (payload) => {
+      if (payload?.server_time) syncServerTime(payload.server_time);
+      hideQuestionTimer();
       questionSection.hidden = true;
       resultSection.hidden = false;
       answerSummary.textContent = 'Игра завершена! Итоговый счёт:';
