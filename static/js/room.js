@@ -114,6 +114,28 @@
   const buildQrUrl = (url) =>
     `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
 
+  const formatSeconds = (value, { emptyAsDash = false } = {}) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return emptyAsDash ? "—" : "0.0 с";
+    }
+    const rounded = value >= 100 ? value.toFixed(0) : value.toFixed(1);
+    return `${rounded} с`;
+  };
+
+  const buildScoreboardMeta = (entry) => {
+    const answered = Number.isFinite(entry?.answered_count)
+      ? Number(entry.answered_count)
+      : 0;
+    const hasAnswers = answered > 0;
+    const average = hasAnswers
+      ? formatSeconds(entry?.average_response_time, { emptyAsDash: true })
+      : "—";
+    const total = hasAnswers
+      ? formatSeconds(entry?.total_response_time, { emptyAsDash: true })
+      : "—";
+    return `ответов: ${answered}, ср.: ${average}, сумм.: ${total}`;
+  };
+
   const fetchTemplate = async (state) => {
     if (templateCache.has(state)) {
       return templateCache.get(state);
@@ -366,7 +388,15 @@
         scoreboardList.innerHTML = "";
         (data.scoreboard || []).forEach((entry, index) => {
           const li = document.createElement("li");
-          li.innerHTML = `<span>${index + 1}.</span><strong>${entry.player}</strong><span>${entry.score}</span>`;
+          const meta = buildScoreboardMeta(entry);
+          li.innerHTML = `
+            <span>${index + 1}.</span>
+            <strong>${entry.player}</strong>
+            <span class="scoreboard__score">
+              <span class="scoreboard__score-value">${entry.score}</span>
+              <span class="scoreboard__meta">${meta}</span>
+            </span>
+          `.trim();
           scoreboardList.appendChild(li);
         });
       }
@@ -392,7 +422,15 @@
         scoreboardList.innerHTML = "";
         (data.scoreboard || []).forEach((entry, index) => {
           const li = document.createElement("li");
-          li.innerHTML = `<span class="final-screen__position">${index + 1}</span><span class="final-screen__name">${entry.player}</span><span class="final-screen__score">${entry.score}</span>`;
+          const meta = buildScoreboardMeta(entry);
+          li.innerHTML = `
+            <span class="final-screen__position">${index + 1}</span>
+            <span class="final-screen__name">${entry.player}</span>
+            <span class="final-screen__score">
+              <span class="final-screen__score-value">${entry.score}</span>
+              <span class="scoreboard__meta">${meta}</span>
+            </span>
+          `.trim();
           scoreboardList.appendChild(li);
         });
       }

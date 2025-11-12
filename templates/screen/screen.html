@@ -160,6 +160,28 @@
     startGameBtn.disabled = gameInProgress || players.length === 0;
   };
 
+  const formatSeconds = (value, { emptyAsDash = false } = {}) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return emptyAsDash ? "—" : "0.0 с";
+    }
+    const rounded = value >= 100 ? value.toFixed(0) : value.toFixed(1);
+    return `${rounded} с`;
+  };
+
+  const buildScoreboardMeta = (entry) => {
+    const answered = Number.isFinite(entry?.answered_count)
+      ? Number(entry.answered_count)
+      : 0;
+    const hasAnswers = answered > 0;
+    const average = hasAnswers
+      ? formatSeconds(entry?.average_response_time, { emptyAsDash: true })
+      : "—";
+    const total = hasAnswers
+      ? formatSeconds(entry?.total_response_time, { emptyAsDash: true })
+      : "—";
+    return `ответов: ${answered}, ср.: ${average}, сумм.: ${total}`;
+  };
+
   const renderQuestion = (payload) => {
     if (!payload || !payload.question) {
       return;
@@ -220,7 +242,15 @@
     container.innerHTML = "";
     data.forEach((item, index) => {
       const li = document.createElement("li");
-      li.textContent = `${index + 1}. ${item.player} — ${item.score}`;
+      const meta = buildScoreboardMeta(item);
+      li.innerHTML = `
+        <span>${index + 1}.</span>
+        <strong>${item.player}</strong>
+        <span class="scoreboard__score">
+          <span class="scoreboard__score-value">${item.score}</span>
+          <span class="scoreboard__meta">${meta}</span>
+        </span>
+      `.trim();
       container.appendChild(li);
     });
   };

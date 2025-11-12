@@ -433,11 +433,34 @@
       renderScoreboard(payload.scoreboard || []);
     };
 
+    const formatSeconds = (value, { emptyAsDash = false } = {}) => {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return emptyAsDash ? '—' : '0.0 с';
+      }
+      const rounded = value >= 100 ? value.toFixed(0) : value.toFixed(1);
+      return `${rounded} с`;
+    };
+
+    const buildScoreboardMeta = (entry) => {
+      const answered = Number.isFinite(entry?.answered_count)
+        ? Number(entry.answered_count)
+        : 0;
+      const hasAnswers = answered > 0;
+      const average = hasAnswers
+        ? formatSeconds(entry?.average_response_time, { emptyAsDash: true })
+        : '—';
+      const total = hasAnswers
+        ? formatSeconds(entry?.total_response_time, { emptyAsDash: true })
+        : '—';
+      return `ответов: ${answered}, ср.: ${average}, сумм.: ${total}`;
+    };
+
     const renderScoreboard = (data) => {
       scoreboardList.innerHTML = '';
       data.forEach((item, i) => {
         const li = document.createElement('li');
-        li.textContent = `${i + 1}. ${item.player} — ${item.score}`;
+        const meta = buildScoreboardMeta(item);
+        li.textContent = `${i + 1}. ${item.player} — ${item.score} (${meta})`;
         scoreboardList.appendChild(li);
       });
     };
