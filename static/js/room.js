@@ -20,6 +20,7 @@
   let gameInProgress = false;
   let players = [];
   let lastQuestionContext = null;
+  const responseStats = new Map();
 
   const serverClock = {
     offset: 0,
@@ -133,7 +134,177 @@
     const total = hasAnswers
       ? formatSeconds(entry?.total_response_time, { emptyAsDash: true })
       : "—";
-    return `ответов: ${answered}, ср.: ${average}, сумм.: ${total}`;
+    const best = Number.isFinite(entry?.best_response_time)
+      ? formatSeconds(entry.best_response_time, { emptyAsDash: true })
+      : null;
+    const parts = [`ответов: ${answered}`];
+    parts.push(`ср.: ${average}`);
+    parts.push(`сумм.: ${total}`);
+    if (best) {
+      parts.push(`рекорд: ${best}`);
+    }
+    return parts.join(", ");
+  };
+
+  const resetResponseStats = () => {
+    responseStats.clear();
+  };
+
+  const ensurePlayerStats = (player) => {
+    if (!responseStats.has(player)) {
+      responseStats.set(player, {
+        count: 0,
+        total: 0,
+        best: null,
+        worst: null,
+      });
+    }
+    return responseStats.get(player);
+  };
+
+  const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+
+  const isSameTime = (a, b) =>
+    isFiniteNumber(a) && isFiniteNumber(b) && Math.abs(a - b) <= 1e-6;
+
+  const updateResponseStats = (results = []) => {
+    let bestTime = null;
+    const bestPlayers = new Set();
+
+    results.forEach((item) => {
+      const time = Number(item?.response_time);
+      if (!Number.isFinite(time)) {
+        return;
+      }
+
+      const stats = ensurePlayerStats(item.player);
+      stats.count += 1;
+      stats.total += time;
+      stats.best = stats.best === null ? time : Math.min(stats.best, time);
+      stats.worst = stats.worst === null ? time : Math.max(stats.worst, time);
+
+      if (bestTime === null || time < bestTime - 1e-6) {
+        bestTime = time;
+        bestPlayers.clear();
+        bestPlayers.add(item.player);
+      } else if (isSameTime(time, bestTime)) {
+        bestPlayers.add(item.player);
+      }
+    });
+
+    return { bestTime, bestPlayers };
+  };
+
+  const buildTimingSummary = () => {
+    const perPlayer = Array.from(responseStats.entries()).map(([player, stats]) => ({
+      player,
+      count: stats.count,
+      total: stats.total,
+      average: stats.count ? stats.total / stats.count : null,
+      best: stats.best,
+      worst: stats.worst,
+    }));
+
+    let fastest = null;
+    perPlayer.forEach((item) => {
+      if (!isFiniteNumber(item.best)) {
+        return;
+      }
+      if (!fastest || item.best < fastest.value - 1e-6) {
+        fastest = { player: item.player, value: item.best };
+      } else if (fastest && isSameTime(item.best, fastest.value)) {
+        fastest.players ??= new Set([fastest.player]);
+        fastest.players.add(item.player);
+      }
+    });
+
+    if (fastest?.players) {
+      fastest.players = Array.from(fastest.players);
+    }
+
+    return { perPlayer, fastest };
+  };
+
+  const enhanceScoreboard = (scoreboard = [], summary) => {
+    const fastestValue = summary?.fastest?.value;
+    const fastestPlayers = summary?.fastest?.players || [];
+    const fastestPlayer = summary?.fastest?.player;
+    const fastestCandidates = new Set([
+      ...(typeof fastestPlayer === "string" ? [fastestPlayer] : []),
+      ...fastestPlayers,
+    ]);
+
+    return scoreboard.map((entry) => {
+      const stats = responseStats.get(entry.player) ?? {
+        count: entry.answered_count ?? 0,
+        total: entry.total_response_time ?? 0,
+        best: null,
+        worst: null,
+      };
+
+      const count = Number.isFinite(stats.count) ? stats.count : 0;
+      const total = Number.isFinite(stats.total) ? stats.total : 0;
+      const best = isFiniteNumber(stats.best) ? stats.best : null;
+      const worst = isFiniteNumber(stats.worst) ? stats.worst : null;
+      const average = count ? total / count : null;
+
+      const hasRecord =
+        best !== null &&
+        isFiniteNumber(fastestValue) &&
+        (isSameTime(best, fastestValue) || fastestCandidates.has(entry.player));
+
+      return {
+        ...entry,
+        answered_count: count,
+        total_response_time: total,
+        average_response_time: average,
+        best_response_time: best,
+        worst_response_time: worst,
+        has_fastest_record: hasRecord,
+      };
+    });
+  };
+
+  const prepareResultsPayload = (payload = {}) => {
+    const results = Array.isArray(payload.results) ? payload.results : [];
+    const { bestTime, bestPlayers } = updateResponseStats(results);
+    const summary = buildTimingSummary();
+
+    const enhancedResults = results.map((item) => {
+      const responseTime = Number(item?.response_time);
+      const formattedTime = Number.isFinite(responseTime)
+        ? formatSeconds(responseTime, { emptyAsDash: true })
+        : "—";
+      const isFastest =
+        Number.isFinite(responseTime) &&
+        (bestPlayers.has(item.player) || isSameTime(responseTime, bestTime));
+      return {
+        ...item,
+        response_time: Number.isFinite(responseTime) ? responseTime : null,
+        response_time_formatted: formattedTime,
+        is_fastest: Boolean(isFastest),
+      };
+    });
+
+    const enhancedScoreboard = enhanceScoreboard(payload.scoreboard || [], summary);
+
+    return {
+      ...payload,
+      results: enhancedResults,
+      results_fastest_time: bestTime,
+      scoreboard: enhancedScoreboard,
+      timing_summary: summary,
+    };
+  };
+
+  const prepareFinalPayload = (payload = {}) => {
+    const summary = buildTimingSummary();
+    const enhancedScoreboard = enhanceScoreboard(payload.scoreboard || [], summary);
+    return {
+      ...payload,
+      scoreboard: enhancedScoreboard,
+      timing_summary: summary,
+    };
   };
 
   const fetchTemplate = async (state) => {
@@ -288,6 +459,10 @@
       const answersList = root.querySelector('[data-element="answers"]');
       const scoreboardList = root.querySelector('[data-element="scoreboard"]');
       const timerEl = root.querySelector('[data-element="timer"]');
+      const questionBestTimeEl = root.querySelector(
+        '[data-element="question-best-time"]'
+      );
+      const quizBestTimeEl = root.querySelector('[data-element="quiz-best-time"]');
 
       if (data.question) {
         const { question, question_number: number, total_questions: total } = data;
@@ -377,17 +552,44 @@
         answersList.innerHTML = "";
         (data.results || []).forEach((item) => {
           const li = document.createElement("li");
-          const status = item.is_correct ? "✅" : "❌";
-          const answerText = item.answer ?? "—";
-          li.textContent = `${status} ${item.player}: ${answerText} (${item.score})`;
+          li.className = "question-screen__answer";
+          if (item.is_fastest) {
+            li.classList.add("is-fastest");
+          }
+
+          const status = document.createElement("span");
+          status.className = "question-screen__answer-status";
+          status.textContent = item.is_correct ? "✅" : "❌";
+
+          const player = document.createElement("span");
+          player.className = "question-screen__answer-player";
+          player.textContent = item.player;
+
+          const answer = document.createElement("span");
+          answer.className = "question-screen__answer-value";
+          answer.textContent = item.answer ?? "—";
+
+          const time = document.createElement("span");
+          time.className = "question-screen__answer-time";
+          time.textContent = item.response_time_formatted ?? "—";
+
+          const score = document.createElement("span");
+          score.className = "question-screen__answer-score";
+          score.textContent = item.score;
+
+          li.append(status, player, answer, time, score);
           answersList.appendChild(li);
         });
       }
 
       if (scoreboardList) {
         scoreboardList.innerHTML = "";
+        const fastestRecord = data?.timing_summary?.fastest?.value ?? null;
         (data.scoreboard || []).forEach((entry, index) => {
           const li = document.createElement("li");
+          if (entry.has_fastest_record && fastestRecord !== null) {
+            li.classList.add("has-record");
+          }
           const meta = buildScoreboardMeta(entry);
           li.innerHTML = `
             <span>${index + 1}.</span>
@@ -399,6 +601,38 @@
           `.trim();
           scoreboardList.appendChild(li);
         });
+      }
+
+      if (questionBestTimeEl) {
+        const bestTime = data?.results_fastest_time;
+        questionBestTimeEl.textContent = isFiniteNumber(bestTime)
+          ? formatSeconds(bestTime)
+          : "—";
+      }
+
+      if (quizBestTimeEl) {
+        const quizBest = data?.timing_summary?.fastest?.value;
+        const quizBestPlayer = data?.timing_summary?.fastest?.player;
+        const quizBestExtra = data?.timing_summary?.fastest?.players || [];
+        if (isFiniteNumber(quizBest)) {
+          const formatted = formatSeconds(quizBest);
+          const players = new Set();
+          if (quizBestPlayer) {
+            players.add(quizBestPlayer);
+          }
+          quizBestExtra.forEach((player) => {
+            if (typeof player === "string") {
+              players.add(player);
+            }
+          });
+          if (players.size > 0) {
+            quizBestTimeEl.textContent = `${formatted} — ${Array.from(players).join(", ")}`;
+          } else {
+            quizBestTimeEl.textContent = formatted;
+          }
+        } else {
+          quizBestTimeEl.textContent = "—";
+        }
       }
     },
     final(data) {
@@ -413,6 +647,8 @@
 
       const quizTitleEl = root.querySelector('[data-element="quiz-title"]');
       const scoreboardList = root.querySelector('[data-element="final-scoreboard"]');
+      const recordValueEl = root.querySelector('[data-element="timing-summary-best"]');
+      const recordPlayerEl = root.querySelector('[data-element="timing-summary-best-player"]');
 
       if (quizTitleEl) {
         quizTitleEl.textContent = roomConfig.quizTitle;
@@ -422,6 +658,9 @@
         scoreboardList.innerHTML = "";
         (data.scoreboard || []).forEach((entry, index) => {
           const li = document.createElement("li");
+          if (entry.has_fastest_record) {
+            li.classList.add("is-record");
+          }
           const meta = buildScoreboardMeta(entry);
           li.innerHTML = `
             <span class="final-screen__position">${index + 1}</span>
@@ -433,6 +672,35 @@
           `.trim();
           scoreboardList.appendChild(li);
         });
+      }
+
+      if (recordValueEl) {
+        const best = data?.timing_summary?.fastest?.value;
+        recordValueEl.textContent = isFiniteNumber(best)
+          ? formatSeconds(best)
+          : "—";
+      }
+
+      if (recordPlayerEl) {
+        const bestPlayer = data?.timing_summary?.fastest?.player;
+        const extraPlayers = data?.timing_summary?.fastest?.players || [];
+        const players = new Set();
+        if (bestPlayer) {
+          players.add(bestPlayer);
+        }
+        extraPlayers.forEach((player) => {
+          if (typeof player === "string") {
+            players.add(player);
+          }
+        });
+
+        if (players.size > 0) {
+          recordPlayerEl.textContent = `— ${Array.from(players).join(", ")}`;
+          recordPlayerEl.hidden = false;
+        } else {
+          recordPlayerEl.textContent = "";
+          recordPlayerEl.hidden = true;
+        }
       }
     },
   };
@@ -498,16 +766,19 @@
             renderPlayers(payload?.players || []);
             break;
           case "show_question":
+            if ((payload?.question_number ?? 0) <= 1) {
+              resetResponseStats();
+            }
             gameInProgress = true;
             safeEnsureState("question", payload || {});
             break;
           case "show_results":
-            safeEnsureState("question", payload || {});
+            safeEnsureState("question", prepareResultsPayload(payload || {}));
             break;
           case "show_final":
             gameInProgress = false;
             lastQuestionContext = null;
-            safeEnsureState("final", payload || {});
+            safeEnsureState("final", prepareFinalPayload(payload || {}));
             break;
           case "error":
             showError(payload?.message ?? "Неизвестная ошибка");
