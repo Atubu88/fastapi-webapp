@@ -319,12 +319,34 @@ class ScreenRoomManager:
         payload["server_time"] = self._current_time_iso()
         return payload
 
-    def _build_scoreboard(self, room: Room) -> List[Dict[str, str | int]]:
-        scoreboard = [
-            {"player": player.name, "score": player.score}
-            for player in room.players.values()
-        ]
-        scoreboard.sort(key=lambda item: (-int(item["score"]), item["player"]))
+    def _build_scoreboard(self, room: Room) -> List[Dict[str, str | int | float | None]]:
+        scoreboard: List[Dict[str, str | int | float | None]] = []
+        for player in room.players.values():
+            answered_count = len(player.response_times)
+            total_response_time = player.total_response_time if answered_count else 0.0
+            average_response_time: float | None = (
+                total_response_time / answered_count if answered_count else None
+            )
+            scoreboard.append(
+                {
+                    "player": player.name,
+                    "score": player.score,
+                    "answered_count": answered_count,
+                    "total_response_time": total_response_time,
+                    "average_response_time": average_response_time,
+                }
+            )
+
+        def sort_key(item: Dict[str, str | int | float | None]) -> tuple:
+            score = int(item["score"])
+            answered = int(item.get("answered_count", 0))
+            average = item.get("average_response_time")
+            average_value = float("inf")
+            if isinstance(average, (int, float)):
+                average_value = float(average)
+            return (-score, -answered, average_value, str(item["player"]))
+
+        scoreboard.sort(key=sort_key)
         return scoreboard
 
     async def _handle_question_timeout(self, room: Room, duration: int) -> None:
