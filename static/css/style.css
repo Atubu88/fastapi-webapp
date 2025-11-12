@@ -471,11 +471,81 @@ main {
   color: rgba(255, 255, 255, 0.92);
 }
 
+.question-screen__answer {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) minmax(160px, 2fr) auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.question-screen__answer-status {
+  font-size: 1.1rem;
+}
+
+.question-screen__answer-player {
+  font-weight: 600;
+}
+
+.question-screen__answer-value {
+  font-variant-numeric: normal;
+  word-break: break-word;
+}
+
+.question-screen__answer-time,
+.question-screen__answer-score {
+  font-weight: 600;
+}
+
+.question-screen__answer-time {
+  color: rgba(139, 92, 246, 0.9);
+  justify-self: end;
+}
+
+.question-screen__answer-score {
+  justify-self: end;
+}
+
+.question-screen__answer.is-fastest {
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.55);
+  background: rgba(76, 29, 149, 0.45);
+}
+
+.question-screen__answer.is-fastest .question-screen__answer-time {
+  color: #facc15;
+}
+
 .question-screen__scoreboard li {
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 0.75rem;
   align-items: center;
+}
+
+.question-screen__scoreboard li.has-record {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.45);
+}
+
+.question-screen__timing-summary {
+  margin-top: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.question-screen__timing-summary dt {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.question-screen__timing-summary dd {
+  margin: 0.35rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .scoreboard__score {
@@ -534,6 +604,35 @@ main {
   width: min(520px, 100%);
 }
 
+.final-screen__summary {
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.18), rgba(129, 140, 248, 0.18));
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(79, 70, 229, 0.18);
+}
+
+.final-screen__summary h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  color: #312e81;
+}
+
+.final-screen__summary-record {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
+.final-screen__summary-player {
+  margin-left: 0.35rem;
+  font-weight: 600;
+  color: #4338ca;
+}
+
 .final-screen__scoreboard li {
   display: grid;
   grid-template-columns: 56px 1fr 80px;
@@ -544,6 +643,15 @@ main {
   color: #1f2937;
   font-weight: 600;
   box-shadow: 0 16px 40px rgba(99, 102, 241, 0.15);
+}
+
+.final-screen__scoreboard li.is-record {
+  border: 2px solid rgba(59, 130, 246, 0.55);
+  box-shadow: 0 18px 48px rgba(59, 130, 246, 0.3);
+}
+
+.final-screen__scoreboard li.is-record .final-screen__position {
+  color: #1d4ed8;
 }
 
 .final-screen__position {
