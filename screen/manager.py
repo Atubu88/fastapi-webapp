@@ -39,6 +39,9 @@ class Player:
     name: str
     answered: bool = False
     score: int = 0
+    last_answered_at: Optional[datetime] = None
+    response_times: List[float] = field(default_factory=list)
+    total_response_time: float = 0.0
 
 
 class ScreenRoomManager:
@@ -69,6 +72,7 @@ class ScreenRoomManager:
             player = Player(name=player_name)
             room.players[player_name] = player
             room.scores[player_name] = 0
+        self._ensure_player_tracking(player)
         return player
 
     def all_answered(self, room_id: str) -> bool:
@@ -146,13 +150,20 @@ class ScreenRoomManager:
         if room is None:
             raise ValueError(f"Room '{room_id}' not found")
 
+        self._cancel_question_timer(room)
         room.questions = questions
         room.current_question_index = -1
         room.answers.clear()
         room.events.clear()
+        room.question_started_at = None
+        room.question_duration = None
         for player in room.players.values():
+            self._ensure_player_tracking(player)
             player.score = 0
             player.answered = False
+            player.last_answered_at = None
+            player.response_times.clear()
+            player.total_response_time = 0.0
             room.scores[player.name] = 0
 
         await self.show_next_question(room_id)
@@ -166,7 +177,9 @@ class ScreenRoomManager:
         room.current_question_index += 1
         room.answers.clear()
         for player in room.players.values():
+            self._ensure_player_tracking(player)
             player.answered = False
+            player.last_answered_at = None
 
         if room.current_question_index >= len(room.questions):
             room.question_started_at = None
@@ -196,7 +209,14 @@ class ScreenRoomManager:
 
         room.answers[player_name] = answer
         player = room.players[player_name]
+        self._ensure_player_tracking(player)
         player.answered = True
+        now = datetime.now(timezone.utc)
+        player.last_answered_at = now
+        if room.question_started_at is not None:
+            response_time = (now - room.question_started_at).total_seconds()
+            player.response_times.append(response_time)
+            player.total_response_time += response_time
 
         if self.all_answered(room_id):
             await self._handle_all_answers(room)
@@ -287,6 +307,7 @@ class ScreenRoomManager:
                 return
 
             for player in room.players.values():
+                self._ensure_player_tracking(player)
                 if not player.answered:
                     room.answers.setdefault(player.name, None)
                     player.answered = True
@@ -322,6 +343,15 @@ class ScreenRoomManager:
             if value > 0:
                 return value
         return DEFAULT_QUESTION_DURATION
+
+    @staticmethod
+    def _ensure_player_tracking(player: Player) -> None:
+        if not hasattr(player, "last_answered_at"):
+            player.last_answered_at = None
+        if not hasattr(player, "response_times") or player.response_times is None:
+            player.response_times = []
+        if not hasattr(player, "total_response_time") or player.total_response_time is None:
+            player.total_response_time = 0.0
 
     async def _send_json(
         self, websocket: WebSocket | None, event: str, payload: Dict | None
