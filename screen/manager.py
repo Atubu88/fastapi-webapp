@@ -40,8 +40,11 @@ class Player:
     answered: bool = False
     score: int = 0
     last_answered_at: Optional[datetime] = None
+    last_response_time: Optional[float] = None
     response_times: List[float] = field(default_factory=list)
     total_response_time: float = 0.0
+    min_response_time: Optional[float] = None
+    max_response_time: Optional[float] = None
 
 
 class ScreenRoomManager:
@@ -162,8 +165,11 @@ class ScreenRoomManager:
             player.score = 0
             player.answered = False
             player.last_answered_at = None
+            player.last_response_time = None
             player.response_times.clear()
             player.total_response_time = 0.0
+            player.min_response_time = None
+            player.max_response_time = None
             room.scores[player.name] = 0
 
         await self.show_next_question(room_id)
@@ -180,6 +186,7 @@ class ScreenRoomManager:
             self._ensure_player_tracking(player)
             player.answered = False
             player.last_answered_at = None
+            player.last_response_time = None
 
         if room.current_question_index >= len(room.questions):
             room.question_started_at = None
@@ -213,16 +220,35 @@ class ScreenRoomManager:
         player.answered = True
         now = datetime.now(timezone.utc)
         player.last_answered_at = now
+        response_time: Optional[float] = None
         if room.question_started_at is not None:
             response_time = (now - room.question_started_at).total_seconds()
+        player.last_response_time = response_time
+        if response_time is not None:
             player.response_times.append(response_time)
             player.total_response_time += response_time
+            if (
+                player.min_response_time is None
+                or response_time < player.min_response_time
+            ):
+                player.min_response_time = response_time
+            if (
+                player.max_response_time is None
+                or response_time > player.max_response_time
+            ):
+                player.max_response_time = response_time
 
         if self.all_answered(room_id):
             await self._handle_all_answers(room)
 
     async def _handle_all_answers(self, room: Room) -> None:
         self._cancel_question_timer(room)
+        for player in room.players.values():
+            self._ensure_player_tracking(player)
+            if player.name not in room.answers:
+                room.answers[player.name] = None
+                if not player.answered:
+                    player.last_response_time = None
         payload = self._build_results_payload(room)
         await self.broadcast(room.room_id, "show_results", payload)
         await self.show_next_question(room.room_id)
@@ -274,6 +300,8 @@ class ScreenRoomManager:
                     "answer": answer,
                     "is_correct": is_correct,
                     "score": player.score,
+                    "answered": player.answered,
+                    "response_time": player.last_response_time,
                 }
             )
             room.scores[player_name] = player.score
@@ -311,6 +339,7 @@ class ScreenRoomManager:
                 if not player.answered:
                     room.answers.setdefault(player.name, None)
                     player.answered = True
+                    player.last_response_time = None
 
             payload = self._build_results_payload(room)
             await self.broadcast(room.room_id, "show_results", payload)
@@ -348,10 +377,16 @@ class ScreenRoomManager:
     def _ensure_player_tracking(player: Player) -> None:
         if not hasattr(player, "last_answered_at"):
             player.last_answered_at = None
+        if not hasattr(player, "last_response_time"):
+            player.last_response_time = None
         if not hasattr(player, "response_times") or player.response_times is None:
             player.response_times = []
         if not hasattr(player, "total_response_time") or player.total_response_time is None:
             player.total_response_time = 0.0
+        if not hasattr(player, "min_response_time"):
+            player.min_response_time = None
+        if not hasattr(player, "max_response_time"):
+            player.max_response_time = None
 
     async def _send_json(
         self, websocket: WebSocket | None, event: str, payload: Dict | None
