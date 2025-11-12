@@ -250,6 +250,8 @@
       if (!questionTimer) return;
       questionTimer.textContent = '00:00';
       questionTimer.hidden = true;
+      questionTimer.setAttribute('hidden', '');
+      questionTimer.setAttribute('aria-hidden', 'true');
       questionTimer.classList.remove('is-warning');
     };
 
@@ -283,6 +285,8 @@
       }
       timerEndTime = start + duration * 1000;
       questionTimer.hidden = false;
+      questionTimer.removeAttribute('hidden');
+      questionTimer.setAttribute('aria-hidden', 'false');
       questionTimer.classList.remove('is-warning');
       renderQuestionTimer();
       clearTimerInterval();
