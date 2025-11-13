@@ -685,8 +685,8 @@ main {
 
 .final-screen__row {
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: baseline;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
   gap: 0.65rem 1rem;
   padding: 0.9rem 1.2rem;
   border-radius: 16px;
@@ -720,14 +720,13 @@ main {
 }
 
 .final-screen__meta {
-  grid-column: 1 / -1;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.45rem;
   font-size: clamp(0.95rem, 2.4vw, 1.05rem);
   color: rgba(31, 41, 55, 0.68);
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .final-screen__points {
