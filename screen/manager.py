@@ -215,9 +215,16 @@ class ScreenRoomManager:
         if player_name not in room.players:
             raise ValueError(f"Player '{player_name}' not registered in room '{room_id}'")
 
-        room.answers[player_name] = answer
         player = room.players[player_name]
         self._ensure_player_tracking(player)
+        if room.question_started_at is None:
+            return
+        if not (0 <= room.current_question_index < len(room.questions)):
+            return
+        if player.answered:
+            return
+
+        room.answers[player_name] = answer
         player.answered = True
         now = datetime.now(timezone.utc)
         player.last_answered_at = now
@@ -226,6 +233,11 @@ class ScreenRoomManager:
             response_time = (now - room.question_started_at).total_seconds()
         player.last_response_time = response_time
         if response_time is not None:
+            if response_time < 0:
+                response_time = 0.0
+            if room.question_duration is not None:
+                response_time = min(response_time, float(room.question_duration))
+            response_time = float(response_time)
             player.response_times.append(response_time)
             player.total_response_time += response_time
             if (
