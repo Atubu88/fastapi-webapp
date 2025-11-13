@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from typing import Any, Dict, List, Optional
 
 import asyncio
 
@@ -24,7 +25,7 @@ class Room:
     screen: WebSocket | None = None
     sockets: Dict[str, WebSocket] = field(default_factory=dict)
     answers: Dict[str, str] = field(default_factory=dict)
-    scores: Dict[str, int] = field(default_factory=dict)
+    scores: Dict[str, float] = field(default_factory=dict)
     questions: List[dict] = field(default_factory=list)
     current_question_index: int = -1
     question_started_at: Optional[datetime] = None
@@ -38,7 +39,7 @@ class Player:
 
     name: str
     answered: bool = False
-    score: int = 0
+    score: float = 0.0
     last_answered_at: Optional[datetime] = None
     last_response_time: Optional[float] = None
     response_times: List[float] = field(default_factory=list)
@@ -74,7 +75,7 @@ class ScreenRoomManager:
         if player is None:
             player = Player(name=player_name)
             room.players[player_name] = player
-            room.scores[player_name] = 0
+            room.scores[player_name] = 0.0
         self._ensure_player_tracking(player)
         return player
 
@@ -162,7 +163,7 @@ class ScreenRoomManager:
         room.question_duration = None
         for player in room.players.values():
             self._ensure_player_tracking(player)
-            player.score = 0
+            player.score = 0.0
             player.answered = False
             player.last_answered_at = None
             player.last_response_time = None
@@ -170,7 +171,7 @@ class ScreenRoomManager:
             player.total_response_time = 0.0
             player.min_response_time = None
             player.max_response_time = None
-            room.scores[player.name] = 0
+            room.scores[player.name] = 0.0
 
         await self.show_next_question(room_id)
 
@@ -286,20 +287,20 @@ class ScreenRoomManager:
     def _build_results_payload(self, room: Room) -> Dict:
         question = room.questions[room.current_question_index]
         correct_answer = question.get("correct_option")
-        question_score = int(question.get("score", 1))
+        question_score = self._extract_question_score(question)
 
         results = []
         for player_name, player in room.players.items():
             answer = room.answers.get(player_name)
             is_correct = answer == correct_answer and answer is not None
             if is_correct:
-                player.score += question_score
+                player.score = self._normalize_score(player.score + question_score)
             results.append(
                 {
                     "player": player_name,
                     "answer": answer,
                     "is_correct": is_correct,
-                    "score": player.score,
+                    "score": self._prepare_score_for_payload(player.score),
                     "answered": player.answered,
                     "response_time": player.last_response_time,
                 }
@@ -330,7 +331,7 @@ class ScreenRoomManager:
             scoreboard.append(
                 {
                     "player": player.name,
-                    "score": player.score,
+                    "score": self._prepare_score_for_payload(player.score),
                     "answered_count": answered_count,
                     "total_response_time": total_response_time,
                     "average_response_time": average_response_time,
@@ -338,13 +339,13 @@ class ScreenRoomManager:
             )
 
         def sort_key(item: Dict[str, str | int | float | None]) -> tuple:
-            score = int(item["score"])
+            score_value = self._coerce_score_value(item.get("score"), default=0.0)
             answered = int(item.get("answered_count", 0))
             average = item.get("average_response_time")
             average_value = float("inf")
             if isinstance(average, (int, float)):
                 average_value = float(average)
-            return (-score, -answered, average_value, str(item["player"]))
+            return (-score_value, -answered, average_value, str(item["player"]))
 
         scoreboard.sort(key=sort_key)
         return scoreboard
@@ -409,6 +410,52 @@ class ScreenRoomManager:
             player.min_response_time = None
         if not hasattr(player, "max_response_time"):
             player.max_response_time = None
+
+    @staticmethod
+    def _coerce_score_value(value: Any, *, default: float | None = 0.0) -> float | None:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return default
+            normalized = stripped.replace(",", ".")
+            try:
+                return float(Decimal(normalized))
+            except (InvalidOperation, ValueError):
+                return default
+        if value is None:
+            return default
+        return default
+
+    def _extract_question_score(self, question: Dict[str, Any]) -> float:
+        raw_score = question.get("score")
+        score = self._coerce_score_value(raw_score, default=None)
+        if score is None:
+            return 1.0
+        return score
+
+    @staticmethod
+    def _normalize_score(value: float, *, places: int = 4) -> float:
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return float(value)
+        quant = Decimal("1").scaleb(-places)
+        normalized = decimal_value.quantize(quant, rounding=ROUND_HALF_UP).normalize()
+        return float(normalized)
+
+    @staticmethod
+    def _prepare_score_for_payload(value: float) -> float | int:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return value  # type: ignore[return-value]
+        if abs(numeric - round(numeric)) < 1e-9:
+            return int(round(numeric))
+        return numeric
 
     async def _send_json(
         self, websocket: WebSocket | None, event: str, payload: Dict | None
