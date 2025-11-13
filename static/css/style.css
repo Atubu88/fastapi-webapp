@@ -596,10 +596,9 @@ main {
 
 /* --- Общие вспомогательные классы для очков и подписей --- */
 .scoreboard__score {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -721,12 +720,13 @@ main {
 
 .final-screen__meta {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   gap: 0.45rem;
   font-size: clamp(0.95rem, 2.4vw, 1.05rem);
   color: rgba(31, 41, 55, 0.68);
   justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .final-screen__points {
