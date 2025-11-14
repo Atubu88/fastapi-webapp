@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 import string
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from fastapi import (
     APIRouter,
@@ -21,6 +21,9 @@ from fastapi.templating import Jinja2Templates
 from core.config import BASE_DIR
 from services.quiz_service import get_quiz_details, get_quiz_questions, list_quizzes
 from .manager import room_manager
+
+if TYPE_CHECKING:  # pragma: no cover - только для подсказок типов
+    from .manager import Room
 
 router = APIRouter(prefix="/screen", tags=["screen"])
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -72,7 +75,11 @@ async def create_room(request: Request, quiz_id: int = Form(...)) -> HTMLRespons
         raise HTTPException(status_code=404, detail="Викторина не найдена")
 
     room_id = _generate_room_id()
-    room_manager.create_room(room_id, quiz_id=quiz_id)
+    room = room_manager.create_room(room_id, quiz_id=quiz_id)
+
+    quiz_title = quiz.get("title") if isinstance(quiz, dict) else None
+    if quiz_title:
+        room.metadata["quiz_title"] = quiz_title
 
     asyncio.create_task(_preload_room_questions(room_id, quiz_id))
 
@@ -101,11 +108,38 @@ async def screen_fragment(request: Request, state: str) -> HTMLResponse:
     return templates.TemplateResponse(template_name, {"request": request})
 
 
+async def _resolve_quiz_title(room: Room | None) -> str | None:
+    if room is None:
+        return None
+
+    quiz_title = room.metadata.get("quiz_title")
+    if quiz_title:
+        return quiz_title
+
+    if room.quiz_id is None:
+        return None
+
+    quiz = await asyncio.to_thread(get_quiz_details, room.quiz_id)
+    if not quiz:
+        return None
+
+    quiz_title = quiz.get("title")
+    if quiz_title:
+        room.metadata["quiz_title"] = quiz_title
+    return quiz_title
+
+
 @router.get("/join", response_class=HTMLResponse, name="screen:join")
 async def join_room_get(request: Request, code: str) -> HTMLResponse:
+    room = room_manager.get_room(code)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    quiz_title = await _resolve_quiz_title(room)
+
     return templates.TemplateResponse(
         "screen/join_form.html",
-        {"request": request, "room_id": code},
+        {"request": request, "room_id": code, "quiz_title": quiz_title},
     )
 
 
@@ -124,12 +158,15 @@ async def join_room_post(
     except ValueError as exc:  # pragma: no cover - защитный код
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    quiz_title = await _resolve_quiz_title(room)
+
     return templates.TemplateResponse(
         "screen/join.html",
         {
             "request": request,
             "room_id": room.room_id,
             "player_name": player.name,
+            "quiz_title": quiz_title,
         },
     )
 

@@ -26,6 +26,9 @@
 </head>
 <body>
   <h1>Подключение к комнате {{ room_id }}</h1>
+  {% if quiz_title %}
+  <p>Викторина: <strong>{{ quiz_title }}</strong></p>
+  {% endif %}
   <p>Пожалуйста, подождите...</p>
 
   <script>
