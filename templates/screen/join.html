@@ -261,6 +261,9 @@
   <div class="container">
     <h1>Вы в игре!</h1>
     <p>Игрок <strong>{{ player_name }}</strong> подключился к комнате <strong>{{ room_id }}</strong>.</p>
+    {% if quiz_title %}
+    <p>Текущая викторина: <strong>{{ quiz_title }}</strong></p>
+    {% endif %}
     <p id="status">Ожидание событий от ведущего…</p>
 
     <section id="question" hidden>
