@@ -13,6 +13,7 @@
   {% endif %}
 
   <div class="quiz-admin__layout">
+    <!-- Левая колонка: форма добавления -->
     <article class="card card--form">
       <h2>➕ Добавить новую</h2>
       <p class="hint">Вставь полный текст викторины: тема, вопросы, варианты и правильные ответы.</p>
@@ -22,6 +23,7 @@
       </form>
     </article>
 
+    <!-- Правая колонка: список викторин -->
     <article class="card card--list">
       <div class="card__header">
         <h2>📚 Текущие викторины</h2>
@@ -37,9 +39,20 @@
             <p class="quiz-item__preview">{{ quiz.preview }}</p>
             <span class="quiz-item__questions">{{ quiz.question_label }}</span>
           </div>
-          <form method="post" action="/admin/quizzes/{{ quiz.id }}/delete" class="quiz-item__actions" onsubmit="return confirm('Удалить викторину «{{ quiz.title | escapejs }}»?');">
-            <button type="submit" class="btn btn--danger">🗑 Удалить</button>
-          </form>
+
+          <!-- ВАЖНО: обычная форма, как в тестовом варианте -->
+          <form method="post" class="quiz-item__actions">
+  <button
+    type="submit"
+    class="btn btn--danger"
+    formaction="/admin/quizzes/{{ quiz.id }}/delete"
+    formmethod="post"
+    onclick="return confirm('Удалить викторину «{{ quiz.title }}»?');"
+  >
+    🗑 Удалить
+  </button>
+</form>
+
         </li>
         {% endfor %}
       </ul>
@@ -151,6 +164,8 @@
     background: linear-gradient(135deg, #ef4444, #dc2626);
     color: white;
     box-shadow: 0 12px 24px rgba(239, 68, 68, 0.25);
+    position: relative;
+    z-index: 5;
   }
 
   .btn:hover {
@@ -194,6 +209,8 @@
     padding: 18px;
     border-radius: 16px;
     background: #f9fafb;
+    position: relative;
+    z-index: 1;
   }
 
   .quiz-item__info {
@@ -223,6 +240,8 @@
 
   .quiz-item__actions {
     flex: 0 0 auto;
+    position: relative;
+    z-index: 3;
   }
 
   .empty {
@@ -250,4 +269,3 @@
     }
   }
 </style>
-{% endblock %}
