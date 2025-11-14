@@ -561,11 +561,13 @@ main {
 
 /* --- Таблица лидеров внутри вопроса --- */
 .question-screen__scoreboard li {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  white-space: nowrap;
 }
+
 
 .question-screen__scoreboard li.has-record {
   box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.45);
@@ -596,10 +598,9 @@ main {
 
 /* --- Общие вспомогательные классы для очков и подписей --- */
 .scoreboard__score {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -721,12 +722,13 @@ main {
 
 .final-screen__meta {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   gap: 0.45rem;
   font-size: clamp(0.95rem, 2.4vw, 1.05rem);
   color: rgba(31, 41, 55, 0.68);
   justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .final-screen__points {
@@ -787,7 +789,7 @@ main {
   }
 
   .final-screen__scoreboard li {
-    grid-template-columns: 48px 1fr 72px;
+    grid-template-columns: 48px 1fr max-content;
   }
 }
 
