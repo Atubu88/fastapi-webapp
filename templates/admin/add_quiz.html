@@ -37,7 +37,7 @@
             <p class="quiz-item__preview">{{ quiz.preview }}</p>
             <span class="quiz-item__questions">{{ quiz.question_label }}</span>
           </div>
-          <form method="post" action="/admin/quizzes/{{ quiz.id }}/delete" class="quiz-item__actions" onsubmit="return confirm('Удалить викторину «{{ quiz.title }}»?');">
+          <form method="post" action="/admin/quizzes/{{ quiz.id }}/delete" class="quiz-item__actions" onsubmit="return confirm('Удалить викторину «{{ quiz.title | escapejs }}»?');">
             <button type="submit" class="btn btn--danger">🗑 Удалить</button>
           </form>
         </li>
