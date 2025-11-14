@@ -1,252 +1,39 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="container quiz-admin">
-  <header class="quiz-admin__header">
-    <div>
-      <h1 class="title">🎯 Управление викторинами</h1>
-      <p class="subtitle">Добавляй новые и удаляй лишние викторины в один клик.</p>
-    </div>
-  </header>
+<section class="container">
+  <h1 class="title">➕ Добавить викторину</h1>
 
   {% if message %}
-  <div class="flash flash--{{ message_type }}">{{ message }}</div>
+  <div class="message">{{ message }}</div>
   {% endif %}
 
-  <div class="quiz-admin__layout">
-    <article class="card card--form">
-      <h2>➕ Добавить новую</h2>
-      <p class="hint">Вставь полный текст викторины: тема, вопросы, варианты и правильные ответы.</p>
-      <form method="post">
-        <textarea name="content" rows="18" placeholder="Тема: ..." required></textarea>
-        <button type="submit" class="btn btn--primary">💾 Сохранить</button>
-      </form>
-    </article>
-
-    <article class="card card--list">
-      <div class="card__header">
-        <h2>📚 Текущие викторины</h2>
-        <span class="badge">{{ quizzes|length }}</span>
-      </div>
-
-      {% if quizzes %}
-      <ul class="quiz-list">
-        {% for quiz in quizzes %}
-        <li class="quiz-item">
-          <div class="quiz-item__info">
-            <h3>{{ quiz.title }}</h3>
-            <p class="quiz-item__preview">{{ quiz.preview }}</p>
-            <span class="quiz-item__questions">{{ quiz.question_label }}</span>
-          </div>
-            <button type="submit" class="btn btn--danger">🗑 Удалить</button>
-          </form>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="empty">Пока нет добавленных викторин. Начни с создания первой!</p>
-      {% endif %}
-    </article>
-  </div>
+  <form method="post">
+    <textarea name="content" rows="22" placeholder="Вставь сюда весь текст викторины (вместе с Тема: ...)" required></textarea>
+    <button type="submit" class="btn">💾 Сохранить</button>
+  </form>
 </section>
 
 <style>
-  .quiz-admin {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding: 32px 0;
-  }
-
-  .quiz-admin__header .title {
-    margin-bottom: 6px;
-  }
-
-  .quiz-admin__header .subtitle {
-    color: #6b7280;
-    margin: 0;
-  }
-
-  .flash {
-    padding: 14px 18px;
-    border-radius: 12px;
-    font-weight: 500;
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.15);
-  }
-
-  .flash--success {
-    background: #ecfdf5;
-    color: #047857;
-  }
-
-  .flash--error {
-    background: #fef2f2;
-    color: #b91c1c;
-  }
-
-  .flash--info {
-    background: #eff6ff;
-    color: #1d4ed8;
-  }
-
-  .quiz-admin__layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 24px;
-  }
-
-  .card {
-    background: white;
-    border-radius: 18px;
-    padding: 24px;
-    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .card--form form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
   textarea {
     width: 100%;
-    font-family: "JetBrains Mono", "Fira Code", monospace;
-    padding: 14px;
-    border-radius: 14px;
-    border: 1px solid #d1d5db;
-    min-height: 260px;
+    font-family: monospace;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
     resize: vertical;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-
-  textarea:focus {
-    outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
-  }
-
   .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
+    margin-top: 12px;
+    background: #2563eb;
+    color: white;
     border: none;
-    border-radius: 12px;
-    padding: 12px 18px;
-    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-
-  .btn--primary {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-    color: white;
-    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25);
-  }
-
-  .btn--danger {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    color: white;
-    box-shadow: 0 12px 24px rgba(239, 68, 68, 0.25);
-  }
-
-  .btn:hover {
-    transform: translateY(-1px);
-  }
-
-  .card__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 36px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #eff6ff;
-    color: #1d4ed8;
-    font-weight: 600;
-  }
-
-  .quiz-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .quiz-item {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 18px;
-    border-radius: 16px;
-    background: #f9fafb;
-  }
-
-  .quiz-item__info {
-    flex: 1 1 260px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .quiz-item__info h3 {
-    margin: 0;
-  }
-
-  .quiz-item__preview {
-    margin: 0;
-    color: #6b7280;
-  }
-
-  .quiz-item__questions {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #2563eb;
-  }
-
-  .quiz-item__actions {
-    flex: 0 0 auto;
-  }
-
-  .empty {
-    margin: 12px 0 0;
-    color: #6b7280;
-  }
-
-  @media (max-width: 1024px) {
-    .quiz-admin__layout {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .quiz-admin {
-      padding: 24px 0;
-    }
-
-    .card {
-      padding: 20px;
-    }
-
-    textarea {
-      min-height: 200px;
-    }
+  .message {
+    margin-bottom: 10px;
+    color: green;
   }
 </style>
 {% endblock %}
