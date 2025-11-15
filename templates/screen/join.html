@@ -704,6 +704,9 @@
       if (payload.server_time) syncServerTime(payload.server_time);
       questionTimerController.clear();
       hideAutoStartCountdown({ resetStatus: false });
+      if (statusEl) {
+        statusEl.textContent = 'Ведущий показывает результаты. Ожидайте следующий вопрос…';
+      }
       questionSection.hidden = true;
       resultSection.hidden = false;
 
@@ -719,6 +722,9 @@
       if (payload?.server_time) syncServerTime(payload.server_time);
       questionTimerController.clear();
       hideAutoStartCountdown({ resetStatus: false });
+      if (statusEl) {
+        statusEl.textContent = 'Игра завершена. Спасибо за участие!';
+      }
       questionSection.hidden = true;
       resultSection.hidden = false;
       answerSummary.textContent = 'Игра завершена! Итоговый счёт:';

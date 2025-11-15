@@ -1039,6 +1039,7 @@
             break;
           case "show_results":
             hideGlobalAutoStartBlock();
+            resetAutoStartState();
             safeEnsureState("question", prepareResultsPayload(payload || {}));
             break;
           case "show_final":
