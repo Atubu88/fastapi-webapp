@@ -348,6 +348,7 @@
     const scoreboardList = document.getElementById('scoreboard');
     const autoStartContainer = document.getElementById('auto-start');
     const autoStartCountdown = document.getElementById('auto-start-countdown');
+    const initialAutoStartData = {{ auto_start | tojson | safe }};
 
     const initialStatusText = statusEl?.textContent || 'Ожидание событий от ведущего…';
 
@@ -601,6 +602,12 @@
           break;
       }
     });
+
+    if (initialAutoStartData) {
+      handleAutoStartScheduled(initialAutoStartData);
+    } else {
+      hideAutoStartCountdown();
+    }
 
     const renderQuestion = (payload) => {
       if (!payload) return;
