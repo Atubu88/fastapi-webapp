@@ -12,6 +12,10 @@
     roomId: container.dataset.roomId || "",
     joinUrl: container.dataset.joinUrl || "",
     quizTitle: container.dataset.quizTitle || "",
+    autoStartScheduledAt: container.dataset.autoStartScheduledAt || "",
+    autoStartDelay: container.dataset.autoStartDelay || "",
+    autoStartOrigin: container.dataset.autoStartOrigin || "",
+    autoStartServerTime: container.dataset.autoStartServerTime || "",
   };
 
   const templateCache = new Map();
@@ -111,6 +115,250 @@
       },
     };
   })();
+
+  const autoStartState = {
+    status: "idle",
+    scheduledAt: null,
+    delay: null,
+    origin: null,
+    message: "",
+  };
+
+  const AUTO_START_REASON_MESSAGES = {
+    manual_start: "Автозапуск отменён: игра начата вручную.",
+    host_cancelled: "Автозапуск отменён ведущим.",
+    quiz_not_selected: "Автозапуск не выполнен: для комнаты не выбрана викторина.",
+    load_failed: "Автозапуск не выполнен из-за ошибки загрузки вопросов.",
+    empty_quiz: "Автозапуск не выполнен: в выбранной викторине нет вопросов.",
+    unexpected_error: "Автозапуск отменён из-за непредвиденной ошибки.",
+  };
+
+  const canUseSocket = () => socket && socket.readyState === WebSocket.OPEN;
+
+  const buildAutoStartCancellationMessage = (reason) => {
+    if (typeof reason !== "string" || reason.length === 0) {
+      return "Автозапуск отменён.";
+    }
+    return AUTO_START_REASON_MESSAGES[reason] || "Автозапуск отменён.";
+  };
+
+  const formatAutoStartScheduledMessage = (scheduledAt) => {
+    if (typeof scheduledAt !== "string" || !scheduledAt) {
+      return "Игра запустится автоматически по таймеру.";
+    }
+    const timestamp = Date.parse(scheduledAt);
+    if (Number.isNaN(timestamp)) {
+      return "Игра запустится автоматически по таймеру.";
+    }
+    try {
+      const formatter = new Intl.DateTimeFormat(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const time = formatter.format(new Date(timestamp));
+      return `Игра запустится автоматически в ${time}.`;
+    } catch (error) {
+      return "Игра запустится автоматически по таймеру.";
+    }
+  };
+
+  const startAutoStartCountdown = (timerEl) => {
+    if (!timerEl) {
+      return;
+    }
+
+    const { scheduledAt, delay } = autoStartState;
+    timerEl.classList.remove("is-warning");
+
+    if (typeof scheduledAt !== "string" || !scheduledAt) {
+      countdownTimer.clear();
+      timerEl.hidden = true;
+      timerEl.textContent = "00:00";
+      return;
+    }
+
+    const scheduledTimestamp = Date.parse(scheduledAt);
+    if (Number.isNaN(scheduledTimestamp)) {
+      countdownTimer.clear();
+      timerEl.hidden = true;
+      timerEl.textContent = "00:00";
+      return;
+    }
+
+    let durationSeconds = null;
+    if (typeof delay === "number" && Number.isFinite(delay) && delay >= 0) {
+      durationSeconds = delay;
+    } else {
+      const diffMs = scheduledTimestamp - serverClock.now();
+      if (Number.isFinite(diffMs)) {
+        durationSeconds = Math.max(0, diffMs / 1000);
+      }
+    }
+
+    if (durationSeconds === null) {
+      countdownTimer.clear();
+      timerEl.hidden = true;
+      timerEl.textContent = "00:00";
+      return;
+    }
+
+    if (durationSeconds <= 0.5) {
+      countdownTimer.clear();
+      timerEl.hidden = false;
+      timerEl.textContent = "00:00";
+      timerEl.classList.add("is-warning");
+      return;
+    }
+
+    const startTimestamp = scheduledTimestamp - durationSeconds * 1000;
+    const startIso = new Date(startTimestamp).toISOString();
+    countdownTimer.start(timerEl, startIso, durationSeconds);
+  };
+
+  const applyAutoStartUi = (root) => {
+    if (!root) {
+      return;
+    }
+
+    const messageEl = root.querySelector('[data-element="auto-start-message"]');
+    const timerEl = root.querySelector('[data-element="auto-start-countdown"]');
+    const cancelBtn = root.querySelector('[data-action="cancel-auto-start"]');
+    const startBtn = root.querySelector('[data-action="start-game"]');
+    const { status } = autoStartState;
+
+    if (status === "scheduled") {
+      if (messageEl) {
+        messageEl.textContent = formatAutoStartScheduledMessage(
+          autoStartState.scheduledAt
+        );
+        messageEl.hidden = false;
+      }
+      if (timerEl) {
+        startAutoStartCountdown(timerEl);
+      }
+      if (cancelBtn) {
+        cancelBtn.hidden = false;
+        cancelBtn.disabled = !canUseSocket();
+      }
+    } else {
+      if (timerEl) {
+        countdownTimer.clear();
+        timerEl.hidden = true;
+        timerEl.classList.remove("is-warning");
+        timerEl.textContent = "00:00";
+      }
+      if (cancelBtn) {
+        cancelBtn.hidden = true;
+        cancelBtn.disabled = false;
+      }
+      if (messageEl) {
+        if (status === "cancelled" && autoStartState.message) {
+          messageEl.textContent = autoStartState.message;
+          messageEl.hidden = false;
+        } else if (status === "triggered" && autoStartState.message) {
+          messageEl.textContent = autoStartState.message;
+          messageEl.hidden = false;
+        } else {
+          messageEl.textContent = "";
+          messageEl.hidden = true;
+        }
+      }
+    }
+
+    if (startBtn) {
+      startBtn.disabled = gameInProgress || players.length === 0;
+    }
+  };
+
+  const refreshLobbyAutoStartUi = () => {
+    const root = container.querySelector(".lobby-screen");
+    if (root) {
+      applyAutoStartUi(root);
+    }
+  };
+
+  const setAutoStartScheduled = (payload = {}, options = {}) => {
+    serverClock.sync(payload?.server_time);
+    countdownTimer.clear();
+    autoStartState.status = "scheduled";
+    autoStartState.scheduledAt =
+      typeof payload?.scheduled_at === "string" && payload.scheduled_at
+        ? payload.scheduled_at
+        : null;
+    const parsedDelay = Number(payload?.delay);
+    autoStartState.delay =
+      Number.isFinite(parsedDelay) && parsedDelay >= 0 ? parsedDelay : null;
+    autoStartState.origin = payload?.origin ?? null;
+    autoStartState.message = "";
+    if (!options.skipRender) {
+      refreshLobbyAutoStartUi();
+    }
+  };
+
+  const setAutoStartCancelled = (payload = {}) => {
+    serverClock.sync(payload?.server_time);
+    countdownTimer.clear();
+    autoStartState.status = "cancelled";
+    autoStartState.scheduledAt = null;
+    autoStartState.delay = null;
+    autoStartState.origin = payload?.origin ?? null;
+    autoStartState.message = buildAutoStartCancellationMessage(payload?.reason);
+    refreshLobbyAutoStartUi();
+  };
+
+  const setAutoStartTriggered = (payload = {}) => {
+    serverClock.sync(payload?.server_time);
+    countdownTimer.clear();
+    autoStartState.status = "triggered";
+    autoStartState.scheduledAt = null;
+    autoStartState.delay = null;
+    autoStartState.origin = payload?.origin ?? null;
+    autoStartState.message = "Игра запускается автоматически...";
+    refreshLobbyAutoStartUi();
+  };
+
+  const resetAutoStartState = () => {
+    if (autoStartState.status === "idle") {
+      return;
+    }
+    autoStartState.status = "idle";
+    autoStartState.scheduledAt = null;
+    autoStartState.delay = null;
+    autoStartState.origin = null;
+    autoStartState.message = "";
+    refreshLobbyAutoStartUi();
+  };
+
+  const handleCancelAutoStart = () => {
+    if (!canUseSocket()) {
+      showError("Соединение с сервером не установлено.");
+      return;
+    }
+
+    hideError();
+    socket.send(
+      JSON.stringify({
+        action: "cancel_auto_start",
+        origin: "host",
+        reason: "host_cancelled",
+      })
+    );
+  };
+
+  if (roomConfig.autoStartServerTime) {
+    serverClock.sync(roomConfig.autoStartServerTime);
+  }
+  if (roomConfig.autoStartScheduledAt) {
+    setAutoStartScheduled(
+      {
+        scheduled_at: roomConfig.autoStartScheduledAt,
+        delay: roomConfig.autoStartDelay,
+        origin: roomConfig.autoStartOrigin,
+        server_time: roomConfig.autoStartServerTime,
+      },
+      { skipRender: true }
+    );
+  }
 
   const buildQrUrl = (url) =>
     `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
@@ -411,6 +659,9 @@
       const quizTitleEl = root.querySelector('[data-element="quiz-title"]');
       const playersEl = root.querySelector('[data-element="players"]');
       const startBtn = root.querySelector('[data-action="start-game"]');
+      const cancelAutoStartBtn = root.querySelector(
+        '[data-action="cancel-auto-start"]'
+      );
 
       if (codeEl) {
         codeEl.textContent = roomConfig.roomId;
@@ -443,6 +694,13 @@
         }
         startBtn.disabled = gameInProgress || players.length === 0;
       }
+
+      if (cancelAutoStartBtn && !cancelAutoStartBtn.dataset.bound) {
+        cancelAutoStartBtn.addEventListener("click", handleCancelAutoStart);
+        cancelAutoStartBtn.dataset.bound = "true";
+      }
+
+      applyAutoStartUi(root);
     },
     question(data) {
       const root = container.querySelector(".question-screen");
@@ -732,14 +990,17 @@
 
     socket.addEventListener("open", () => {
       hideError();
+      refreshLobbyAutoStartUi();
     });
 
     socket.addEventListener("close", () => {
       showError("Соединение с сервером потеряно.");
+      refreshLobbyAutoStartUi();
     });
 
     socket.addEventListener("error", () => {
       showError("Произошла ошибка соединения.");
+      refreshLobbyAutoStartUi();
     });
 
     socket.addEventListener("message", (event) => {
@@ -756,6 +1017,7 @@
               resetResponseStats();
             }
             gameInProgress = true;
+            resetAutoStartState();
             safeEnsureState("question", payload || {});
             break;
           case "show_results":
@@ -764,7 +1026,17 @@
           case "show_final":
             gameInProgress = false;
             lastQuestionContext = null;
+            resetAutoStartState();
             safeEnsureState("final", prepareFinalPayload(payload || {}));
+            break;
+          case "auto_start_scheduled":
+            setAutoStartScheduled(payload || {});
+            break;
+          case "auto_start_cancelled":
+            setAutoStartCancelled(payload || {});
+            break;
+          case "auto_start_triggered":
+            setAutoStartTriggered(payload || {});
             break;
           case "error":
             showError(payload?.message ?? "Неизвестная ошибка");

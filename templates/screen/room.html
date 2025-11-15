@@ -13,6 +13,10 @@
     data-room-id="{{ room_id }}"
     data-join-url="{{ join_url }}"
     data-quiz-title="{{ quiz.title }}"
+    data-auto-start-scheduled-at="{{ auto_start.scheduled_at if auto_start else '' }}"
+    data-auto-start-delay="{{ auto_start.delay if auto_start else '' }}"
+    data-auto-start-origin="{{ auto_start.origin if auto_start else '' }}"
+    data-auto-start-server-time="{{ auto_start.server_time if auto_start else '' }}"
   ></div>
 
   <p id="room-error" class="error" hidden></p>
