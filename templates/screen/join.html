@@ -46,33 +46,7 @@
     }
 
     .auto-start {
-      margin: 0.9rem 0;
-      padding: 0.85rem 1rem;
-      border-radius: 14px;
-      background: rgba(37, 99, 235, 0.12);
-      color: #1d4ed8;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
-    }
-
-    .auto-start__status {
-      margin: 0;
-      font-weight: 600;
-      display: inline-flex;
-      gap: 0.45rem;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: inherit;
-    }
-
-    .auto-start__status .question-timer {
-      margin: 0;
-      background: rgba(37, 99, 235, 0.2);
-      color: inherit;
+      display: none !important;
     }
 
     #question {
@@ -280,12 +254,6 @@
       h1 {
         font-size: 1.4rem;
       }
-      .auto-start {
-        padding: 0.75rem 0.85rem;
-      }
-      .auto-start__status {
-        font-size: 0.95rem;
-      }
       .btn {
         padding: 16px 12px;
         font-size: 1.05rem;
@@ -303,11 +271,7 @@
     <p id="status">Ожидание событий от ведущего…</p>
 
     <div id="auto-start" class="auto-start" hidden aria-hidden="true">
-      <p id="auto-start-status" class="auto-start__status" aria-live="polite" role="status">
-        Игра начнётся через
-        <span id="auto-start-countdown" class="question-timer" aria-live="off">00:00</span>
-        (автостарт)
-      </p>
+      <span id="auto-start-countdown" class="question-timer" aria-live="off">00:00</span>
     </div>
 
     <section id="question" hidden>
