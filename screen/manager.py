@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import logging
 from typing import Any, Dict, List, Optional
 
 import asyncio
@@ -11,6 +12,11 @@ DEFAULT_QUESTION_DURATION = 30
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
+
+from services.quiz_service import get_quiz_questions
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,6 +37,9 @@ class Room:
     question_started_at: Optional[datetime] = None
     question_duration: Optional[int] = None
     question_timeout_task: Optional[asyncio.Task[None]] = None
+    auto_start_at: Optional[datetime] = None
+    auto_start_task: Optional[asyncio.Task[None]] = None
+    auto_start_origin: Optional[str] = None
 
 
 @dataclass
@@ -154,6 +163,8 @@ class ScreenRoomManager:
         if room is None:
             raise ValueError(f"Room '{room_id}' not found")
 
+        self._cancel_auto_start_task(room)
+        self._clear_auto_start_state(room)
         self._cancel_question_timer(room)
         room.questions = questions
         room.current_question_index = -1
@@ -206,6 +217,71 @@ class ScreenRoomManager:
             room.question_timeout_task = asyncio.create_task(
                 self._handle_question_timeout(room, duration)
             )
+
+    async def schedule_auto_start(
+        self,
+        room_id: str,
+        start_at: datetime,
+        *,
+        origin: str | None = None,
+    ) -> None:
+        room = self.get_room(room_id)
+        if room is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        if room.quiz_id is None:
+            raise ValueError("Для комнаты не выбрана викторина.")
+
+        self._cancel_auto_start_task(room)
+
+        if start_at.tzinfo is None:
+            start_at = start_at.replace(tzinfo=timezone.utc)
+        else:
+            start_at = start_at.astimezone(timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        delay_seconds = max(0.0, (start_at - now).total_seconds())
+
+        task = asyncio.create_task(
+            self._auto_start_countdown(room, delay_seconds, origin)
+        )
+        room.auto_start_task = task
+        room.auto_start_at = start_at
+        room.auto_start_origin = origin
+
+        payload = {
+            "scheduled_at": start_at.isoformat(),
+            "delay": delay_seconds,
+            "origin": origin,
+            "server_time": self._current_time_iso(),
+        }
+        await self.broadcast(room.room_id, "auto_start_scheduled", payload)
+
+    async def cancel_auto_start(
+        self,
+        room_id: str,
+        *,
+        origin: str | None = None,
+        reason: str | None = None,
+    ) -> None:
+        room = self.get_room(room_id)
+        if room is None:
+            raise ValueError(f"Room '{room_id}' not found")
+
+        if room.auto_start_task is None and room.auto_start_at is None:
+            return
+
+        scheduled_at = room.auto_start_at
+        auto_origin = room.auto_start_origin
+        self._cancel_auto_start_task(room)
+        self._clear_auto_start_state(room)
+
+        payload = {
+            "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+            "origin": origin or auto_origin,
+            "reason": reason,
+            "server_time": self._current_time_iso(),
+        }
+        await self.broadcast(room.room_id, "auto_start_cancelled", payload)
 
     async def submit_answer(self, room_id: str, player_name: str, answer: str) -> None:
         room = self.get_room(room_id)
@@ -362,6 +438,119 @@ class ScreenRoomManager:
         scoreboard.sort(key=sort_key)
         return scoreboard
 
+    async def preload_room_questions(self, room_id: str) -> None:
+        room = self.get_room(room_id)
+        if room is None:
+            return
+        try:
+            await self._ensure_room_questions(room)
+        except Exception:
+            logger.exception(
+                "Failed to preload quiz questions",
+                extra={"room_id": room_id, "quiz_id": room.quiz_id},
+            )
+
+    async def ensure_questions_loaded(self, room: Room) -> List[dict]:
+        return await self._ensure_room_questions(room)
+
+    async def _auto_start_countdown(
+        self, room: Room, delay_seconds: float, origin: str | None
+    ) -> None:
+        try:
+            if delay_seconds > 0:
+                await asyncio.sleep(delay_seconds)
+            if room.auto_start_task is not asyncio.current_task():
+                return
+
+            if room.quiz_id is None:
+                await self._send_json(
+                    room.screen,
+                    "error",
+                    {"message": "Для комнаты не выбрана викторина."},
+                )
+                await self._notify_auto_start_cancelled(
+                    room,
+                    origin=origin,
+                    reason="quiz_not_selected",
+                )
+                return
+
+            try:
+                questions = await self._ensure_room_questions(room)
+            except Exception:
+                logger.exception(
+                    "Failed to load quiz questions for auto start",
+                    extra={"room_id": room.room_id, "quiz_id": room.quiz_id},
+                )
+                await self._send_json(
+                    room.screen,
+                    "error",
+                    {"message": "Не удалось загрузить вопросы викторины."},
+                )
+                await self._notify_auto_start_cancelled(
+                    room,
+                    origin=origin,
+                    reason="load_failed",
+                )
+                return
+
+            if not questions:
+                await self._send_json(
+                    room.screen,
+                    "error",
+                    {"message": "В выбранной викторине нет вопросов."},
+                )
+                await self._notify_auto_start_cancelled(
+                    room,
+                    origin=origin,
+                    reason="empty_quiz",
+                )
+                return
+
+            await self.start_game(room.room_id, questions)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Unexpected error during auto start",
+                extra={"room_id": room.room_id},
+            )
+            await self._send_json(
+                room.screen,
+                "error",
+                {
+                    "message": "Произошла ошибка при автоматическом запуске игры.",
+                },
+            )
+            await self._notify_auto_start_cancelled(
+                room,
+                origin=origin,
+                reason="unexpected_error",
+            )
+        finally:
+            if room.auto_start_task is asyncio.current_task():
+                self._clear_auto_start_state(room)
+
+    async def _notify_auto_start_cancelled(
+        self,
+        room: Room,
+        *,
+        origin: str | None,
+        reason: str | None,
+    ) -> None:
+        if room.auto_start_task is None and room.auto_start_at is None:
+            return
+        scheduled_at = room.auto_start_at
+        auto_origin = room.auto_start_origin
+        self._clear_auto_start_state(room)
+        payload = {
+            "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+            "origin": origin or auto_origin,
+            "reason": reason,
+            "server_time": self._current_time_iso(),
+        }
+        await self.broadcast(room.room_id, "auto_start_cancelled", payload)
+
     async def _handle_question_timeout(self, room: Room, duration: int) -> None:
         try:
             await asyncio.sleep(duration)
@@ -392,6 +581,29 @@ class ScreenRoomManager:
             if task is not current:
                 task.cancel()
         room.question_timeout_task = None
+
+    def _cancel_auto_start_task(self, room: Room) -> None:
+        task = room.auto_start_task
+        if task is not None:
+            current = asyncio.current_task()
+            if task is not current:
+                task.cancel()
+        room.auto_start_task = None
+
+    def _clear_auto_start_state(self, room: Room) -> None:
+        room.auto_start_at = None
+        room.auto_start_origin = None
+        room.auto_start_task = None
+
+    async def _ensure_room_questions(self, room: Room) -> List[dict]:
+        if room.questions:
+            return room.questions
+        if room.quiz_id is None:
+            raise ValueError("Для комнаты не выбрана викторина.")
+
+        questions = await asyncio.to_thread(get_quiz_questions, room.quiz_id)
+        room.questions = questions
+        return questions
 
     def _extract_question_duration(self, question: Dict) -> Optional[int]:
         """Получить время на ответ в секундах из вопроса."""
