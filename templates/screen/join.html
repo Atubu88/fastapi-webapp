@@ -45,6 +45,36 @@
       margin-bottom: 0.5rem;
     }
 
+    .auto-start {
+      margin: 0.9rem 0;
+      padding: 0.85rem 1rem;
+      border-radius: 14px;
+      background: rgba(37, 99, 235, 0.12);
+      color: #1d4ed8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+    }
+
+    .auto-start__status {
+      margin: 0;
+      font-weight: 600;
+      display: inline-flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: inherit;
+    }
+
+    .auto-start__status .question-timer {
+      margin: 0;
+      background: rgba(37, 99, 235, 0.2);
+      color: inherit;
+    }
+
     #question {
       overflow: hidden;
       margin-top: 0.6rem;
@@ -250,6 +280,12 @@
       h1 {
         font-size: 1.4rem;
       }
+      .auto-start {
+        padding: 0.75rem 0.85rem;
+      }
+      .auto-start__status {
+        font-size: 0.95rem;
+      }
       .btn {
         padding: 16px 12px;
         font-size: 1.05rem;
@@ -265,6 +301,14 @@
     <p>Текущая викторина: <strong>{{ quiz_title }}</strong></p>
     {% endif %}
     <p id="status">Ожидание событий от ведущего…</p>
+
+    <div id="auto-start" class="auto-start" hidden aria-hidden="true">
+      <p id="auto-start-status" class="auto-start__status" aria-live="polite" role="status">
+        Игра начнётся через
+        <span id="auto-start-countdown" class="question-timer" aria-live="off">00:00</span>
+        (автостарт)
+      </p>
+    </div>
 
     <section id="question" hidden>
       <div id="question-inner" class="question-inner">
@@ -302,12 +346,14 @@
     const resultSection = document.getElementById('result');
     const answerSummary = document.getElementById('answer-summary');
     const scoreboardList = document.getElementById('scoreboard');
+    const autoStartContainer = document.getElementById('auto-start');
+    const autoStartCountdown = document.getElementById('auto-start-countdown');
+
+    const initialStatusText = statusEl?.textContent || 'Ожидание событий от ведущего…';
 
     let hasAnswered = false;
     let currentQuestion = null;
     let serverTimeOffset = 0;
-    let timerIntervalId = null;
-    let timerEndTime = 0;
 
     const syncServerTime = (isoString) => {
       if (!isoString) return;
@@ -318,60 +364,202 @@
 
     const getServerNow = () => Date.now() + serverTimeOffset;
 
-    const clearTimerInterval = () => {
-      if (timerIntervalId) {
-        window.clearInterval(timerIntervalId);
-        timerIntervalId = null;
-      }
-    };
-
-    const hideQuestionTimer = () => {
-      clearTimerInterval();
-      timerEndTime = 0;
-      if (!questionTimer) return;
-      questionTimer.textContent = '00:00';
-      questionTimer.hidden = true;
-      questionTimer.setAttribute('hidden', '');
-      questionTimer.setAttribute('aria-hidden', 'true');
-      questionTimer.classList.remove('is-warning');
-    };
-
-    const renderQuestionTimer = () => {
-      if (!questionTimer || !timerEndTime) {
-        clearTimerInterval();
-        return;
-      }
-      const remaining = timerEndTime - getServerNow();
-      if (remaining <= 0) {
-        questionTimer.textContent = '00:00';
-        questionTimer.classList.add('is-warning');
-        clearTimerInterval();
-        return;
-      }
-      const totalSeconds = Math.max(0, Math.ceil(remaining / 1000));
+    const formatTimerValue = (totalSeconds) => {
       const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
       const seconds = String(totalSeconds % 60).padStart(2, '0');
-      questionTimer.textContent = `${minutes}:${seconds}`;
-      if (totalSeconds <= 10) questionTimer.classList.add('is-warning');
-      else questionTimer.classList.remove('is-warning');
+      return `${minutes}:${seconds}`;
     };
 
-    const startQuestionTimer = (startedAt, durationSeconds) => {
-      if (!questionTimer) return;
-      const start = Date.parse(startedAt);
-      const duration = Number(durationSeconds);
-      if (Number.isNaN(start) || !duration || duration <= 0) {
-        hideQuestionTimer();
+    const createTimerController = (
+      element,
+      {
+        defaultText = '00:00',
+        warningThreshold = 10,
+        autoHide = false,
+        onTick,
+        onClear,
+      } = {}
+    ) => {
+      let target = element ?? null;
+      let intervalId = null;
+      let endTime = 0;
+
+      const setHidden = (hidden) => {
+        if (!target || !autoHide) return;
+        if (hidden) {
+          target.hidden = true;
+          target.setAttribute('hidden', '');
+          target.setAttribute('aria-hidden', 'true');
+        } else {
+          target.hidden = false;
+          target.removeAttribute('hidden');
+          target.setAttribute('aria-hidden', 'false');
+        }
+      };
+
+      const cancelInterval = () => {
+        if (intervalId !== null) {
+          window.clearInterval(intervalId);
+          intervalId = null;
+        }
+      };
+
+      const render = () => {
+        if (!target || !endTime) {
+          cancelInterval();
+          return;
+        }
+        const remaining = endTime - getServerNow();
+        const totalSeconds = Math.max(0, Math.ceil(remaining / 1000));
+        const formatted = formatTimerValue(totalSeconds);
+
+        if (typeof onTick === 'function') onTick(formatted, totalSeconds);
+        if (target) target.textContent = formatted;
+
+        if (target) {
+          if (totalSeconds <= warningThreshold) target.classList.add('is-warning');
+          else target.classList.remove('is-warning');
+        }
+
+        if (remaining <= 0) {
+          cancelInterval();
+        }
+      };
+
+      return {
+        start(startIso, durationSeconds) {
+          if (!target) return;
+          const start = Date.parse(startIso);
+          const duration = Number(durationSeconds);
+          if (Number.isNaN(start) || !duration || duration <= 0) {
+            this.clear();
+            return;
+          }
+          endTime = start + duration * 1000;
+          setHidden(false);
+          target.classList.remove('is-warning');
+          cancelInterval();
+          render();
+          intervalId = window.setInterval(render, 250);
+        },
+        clear() {
+          cancelInterval();
+          endTime = 0;
+          if (target) {
+            target.textContent = defaultText;
+            target.classList.remove('is-warning');
+          }
+          if (typeof onClear === 'function') onClear();
+          setHidden(true);
+        },
+      };
+    };
+
+    const questionTimerController = createTimerController(questionTimer, {
+      autoHide: true,
+    });
+
+    const autoStartTimer = createTimerController(autoStartCountdown, {
+      autoHide: false,
+      onTick: (formatted) => {
+        if (statusEl) {
+          statusEl.textContent = `Игра начнётся через ${formatted} (автостарт)`;
+        }
+      },
+    });
+
+    const showAutoStartContainer = () => {
+      if (!autoStartContainer) return;
+      autoStartContainer.hidden = false;
+      autoStartContainer.removeAttribute('hidden');
+      autoStartContainer.setAttribute('aria-hidden', 'false');
+    };
+
+    const hideAutoStartCountdown = ({ resetStatus = true } = {}) => {
+      autoStartTimer.clear();
+      if (autoStartContainer) {
+        autoStartContainer.hidden = true;
+        autoStartContainer.setAttribute('hidden', '');
+        autoStartContainer.setAttribute('aria-hidden', 'true');
+      }
+      if (resetStatus && statusEl) {
+        statusEl.textContent = initialStatusText;
+      }
+      if (autoStartCountdown) {
+        autoStartCountdown.classList.remove('is-warning');
+      }
+    };
+
+    const handleAutoStartScheduled = (payload) => {
+      if (!payload) return;
+      const serverTime = payload.server_time;
+      const scheduledAt = typeof payload.scheduled_at === 'string' ? payload.scheduled_at : null;
+      if (serverTime) syncServerTime(serverTime);
+      else if (scheduledAt) syncServerTime(scheduledAt);
+
+      if (autoStartCountdown) {
+        autoStartCountdown.classList.remove('is-warning');
+      }
+
+      const parsedDelay = Number(payload.delay);
+      let durationSeconds =
+        Number.isFinite(parsedDelay) && parsedDelay >= 0 ? Number(parsedDelay) : null;
+      let startIso = null;
+
+      if (scheduledAt) {
+        const scheduledTimestamp = Date.parse(scheduledAt);
+        if (!Number.isNaN(scheduledTimestamp)) {
+          if (durationSeconds === null) {
+            const remainingMs = scheduledTimestamp - getServerNow();
+            durationSeconds = Math.max(0, remainingMs / 1000);
+          }
+          if (durationSeconds !== null) {
+            const startTimestamp = scheduledTimestamp - durationSeconds * 1000;
+            startIso = new Date(startTimestamp).toISOString();
+          }
+        }
+      }
+
+      if (!startIso && durationSeconds !== null) {
+        startIso = new Date(getServerNow()).toISOString();
+      }
+
+      if (durationSeconds !== null && durationSeconds <= 0.5) {
+        showAutoStartContainer();
+        autoStartTimer.clear();
+        if (autoStartCountdown) {
+          autoStartCountdown.textContent = '00:00';
+          autoStartCountdown.classList.add('is-warning');
+        }
+        if (statusEl) {
+          statusEl.textContent = 'Игра начнётся через 00:00 (автостарт)';
+        }
         return;
       }
-      timerEndTime = start + duration * 1000;
-      questionTimer.hidden = false;
-      questionTimer.removeAttribute('hidden');
-      questionTimer.setAttribute('aria-hidden', 'false');
-      questionTimer.classList.remove('is-warning');
-      renderQuestionTimer();
-      clearTimerInterval();
-      timerIntervalId = window.setInterval(renderQuestionTimer, 250);
+
+      if (!startIso || durationSeconds === null) {
+        hideAutoStartCountdown();
+        return;
+      }
+
+      showAutoStartContainer();
+      autoStartTimer.start(startIso, durationSeconds);
+    };
+
+    const handleAutoStartCancelled = (payload) => {
+      if (payload?.server_time) syncServerTime(payload.server_time);
+      hideAutoStartCountdown({ resetStatus: false });
+      if (statusEl) {
+        statusEl.textContent = 'Автозапуск отменён. Ожидаем ведущего.';
+      }
+    };
+
+    const handleAutoStartTriggered = (payload) => {
+      if (payload?.server_time) syncServerTime(payload.server_time);
+      hideAutoStartCountdown({ resetStatus: false });
+      if (statusEl) {
+        statusEl.textContent = 'Игра запускается автоматически…';
+      }
     };
 
     questionInner.addEventListener('animationend', (event) => {
@@ -402,6 +590,15 @@
         case 'show_final':
           renderFinal(payload);
           break;
+        case 'auto_start_scheduled':
+          handleAutoStartScheduled(payload);
+          break;
+        case 'auto_start_cancelled':
+          handleAutoStartCancelled(payload);
+          break;
+        case 'auto_start_triggered':
+          handleAutoStartTriggered(payload);
+          break;
       }
     });
 
@@ -414,8 +611,13 @@
       if (serverTime) syncServerTime(serverTime);
       else if (startedAt) syncServerTime(startedAt);
 
+      hideAutoStartCountdown({ resetStatus: false });
+
       if (!payload.question) {
-        hideQuestionTimer();
+        questionTimerController.clear();
+        if (statusEl) {
+          statusEl.textContent = initialStatusText;
+        }
         return;
       }
 
@@ -442,9 +644,9 @@
         statusEl.textContent = 'Выберите ответ.';
 
         if (startedAt && duration) {
-          startQuestionTimer(startedAt, duration);
+          questionTimerController.start(startedAt, duration);
         } else {
-          hideQuestionTimer();
+          questionTimerController.clear();
         }
       };
 
@@ -493,7 +695,8 @@
     const renderResults = (payload) => {
       if (!payload) return;
       if (payload.server_time) syncServerTime(payload.server_time);
-      hideQuestionTimer();
+      questionTimerController.clear();
+      hideAutoStartCountdown({ resetStatus: false });
       questionSection.hidden = true;
       resultSection.hidden = false;
 
@@ -507,7 +710,8 @@
 
     const renderFinal = (payload) => {
       if (payload?.server_time) syncServerTime(payload.server_time);
-      hideQuestionTimer();
+      questionTimerController.clear();
+      hideAutoStartCountdown({ resetStatus: false });
       questionSection.hidden = true;
       resultSection.hidden = false;
       answerSummary.textContent = 'Игра завершена! Итоговый счёт:';
