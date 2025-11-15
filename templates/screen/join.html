@@ -355,6 +355,7 @@
     let hasAnswered = false;
     let currentQuestion = null;
     let serverTimeOffset = 0;
+    let hasGameStarted = false;
 
     const syncServerTime = (isoString) => {
       if (!isoString) return;
@@ -472,6 +473,7 @@
         }
       },
       onComplete: () => {
+        hasGameStarted = true;
         hideAutoStartCountdown({ resetStatus: false });
         if (statusEl) {
           statusEl.textContent = 'Игра запускается автоматически…';
@@ -502,6 +504,10 @@
     };
 
     const handleAutoStartScheduled = (payload) => {
+      if (hasGameStarted) {
+        hideAutoStartCountdown({ resetStatus: false });
+        return;
+      }
       if (!payload) return;
       const serverTime = payload.server_time;
       const scheduledAt = typeof payload.scheduled_at === 'string' ? payload.scheduled_at : null;
@@ -567,6 +573,7 @@
 
     const handleAutoStartTriggered = (payload) => {
       if (payload?.server_time) syncServerTime(payload.server_time);
+      hasGameStarted = true;
       hideAutoStartCountdown({ resetStatus: false });
       if (statusEl) {
         statusEl.textContent = 'Игра запускается автоматически…';
@@ -628,6 +635,7 @@
       if (serverTime) syncServerTime(serverTime);
       else if (startedAt) syncServerTime(startedAt);
 
+      hasGameStarted = true;
       hideAutoStartCountdown({ resetStatus: false });
 
       if (!payload.question) {
@@ -713,6 +721,7 @@
       if (!payload) return;
       if (payload.server_time) syncServerTime(payload.server_time);
       questionTimerController.clear();
+      hasGameStarted = true;
       hideAutoStartCountdown({ resetStatus: false });
       questionSection.hidden = true;
       resultSection.hidden = false;
@@ -728,6 +737,7 @@
     const renderFinal = (payload) => {
       if (payload?.server_time) syncServerTime(payload.server_time);
       questionTimerController.clear();
+      hasGameStarted = true;
       hideAutoStartCountdown({ resetStatus: false });
       questionSection.hidden = true;
       resultSection.hidden = false;
