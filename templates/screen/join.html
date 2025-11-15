@@ -350,7 +350,20 @@
     const autoStartCountdown = document.getElementById('auto-start-countdown');
     const initialAutoStartData = {{ auto_start | tojson | safe }};
 
-    const initialStatusText = statusEl?.textContent || 'Ожидание событий от ведущего…';
+    const initialStatusText = (statusEl?.textContent || 'Ожидание событий от ведущего…').trim() ||
+      'Ожидание событий от ведущего…';
+
+    const setStatusText = (text, source = 'default') => {
+      if (!statusEl) return;
+      statusEl.textContent = text;
+      if (source) {
+        statusEl.dataset.statusSource = source;
+      } else if (statusEl.dataset.statusSource) {
+        delete statusEl.dataset.statusSource;
+      }
+    };
+
+    setStatusText(initialStatusText, 'default');
 
     let hasAnswered = false;
     let currentQuestion = null;
@@ -468,16 +481,12 @@
     const autoStartTimer = createTimerController(autoStartCountdown, {
       autoHide: false,
       onTick: (formatted) => {
-        if (statusEl) {
-          statusEl.textContent = `Игра начнётся через ${formatted} (автостарт)`;
-        }
+        setStatusText(`Игра начнётся через ${formatted} (автостарт)`, 'auto-start');
       },
       onComplete: () => {
         hasGameStarted = true;
         hideAutoStartCountdown({ resetStatus: false });
-        if (statusEl) {
-          statusEl.textContent = 'Игра запускается автоматически…';
-        }
+        setStatusText('Игра запускается автоматически…', 'auto-start');
       },
     });
 
@@ -495,8 +504,10 @@
         autoStartContainer.setAttribute('hidden', '');
         autoStartContainer.setAttribute('aria-hidden', 'true');
       }
-      if (resetStatus && statusEl) {
-        statusEl.textContent = initialStatusText;
+      const shouldResetStatus =
+        resetStatus || statusEl?.dataset.statusSource === 'auto-start';
+      if (shouldResetStatus) {
+        setStatusText(initialStatusText, 'default');
       }
       if (autoStartCountdown) {
         autoStartCountdown.classList.remove('is-warning');
@@ -548,9 +559,7 @@
           autoStartCountdown.textContent = '00:00';
           autoStartCountdown.classList.add('is-warning');
         }
-        if (statusEl) {
-          statusEl.textContent = 'Игра начнётся через 00:00 (автостарт)';
-        }
+        setStatusText('Игра начнётся через 00:00 (автостарт)', 'auto-start');
         return;
       }
 
@@ -566,18 +575,14 @@
     const handleAutoStartCancelled = (payload) => {
       if (payload?.server_time) syncServerTime(payload.server_time);
       hideAutoStartCountdown({ resetStatus: false });
-      if (statusEl) {
-        statusEl.textContent = 'Автозапуск отменён. Ожидаем ведущего.';
-      }
+      setStatusText('Автозапуск отменён. Ожидаем ведущего.', 'auto-start');
     };
 
     const handleAutoStartTriggered = (payload) => {
       if (payload?.server_time) syncServerTime(payload.server_time);
       hasGameStarted = true;
       hideAutoStartCountdown({ resetStatus: false });
-      if (statusEl) {
-        statusEl.textContent = 'Игра запускается автоматически…';
-      }
+      setStatusText('Игра запускается автоматически…', 'auto-start');
     };
 
     questionInner.addEventListener('animationend', (event) => {
@@ -588,7 +593,7 @@
 
     socket.addEventListener('open', () => {
       socket.send(JSON.stringify({ action: 'join', player: playerName }));
-      statusEl.textContent = 'Соединение установлено. Ожидаем вопрос…';
+      setStatusText('Соединение установлено. Ожидаем вопрос…', 'connection');
     });
 
     socket.addEventListener('message', (event) => {
@@ -597,7 +602,7 @@
 
       switch (eventName) {
         case 'player_joined':
-          statusEl.textContent = `В комнате ${payload.players.length} игрок(ов).`;
+          setStatusText(`В комнате ${payload.players.length} игрок(ов).`, 'lobby');
           break;
         case 'show_question':
           renderQuestion(payload);
@@ -640,9 +645,7 @@
 
       if (!payload.question) {
         questionTimerController.clear();
-        if (statusEl) {
-          statusEl.textContent = initialStatusText;
-        }
+        setStatusText(initialStatusText, 'default');
         return;
       }
 
@@ -666,7 +669,7 @@
           optionsContainer.appendChild(button);
         });
 
-        statusEl.textContent = 'Выберите ответ.';
+        setStatusText('Выберите ответ.', 'question');
 
         if (startedAt && duration) {
           questionTimerController.start(startedAt, duration);
@@ -706,7 +709,7 @@
       socket.send(JSON.stringify({ action: 'answer', answer: answerId }));
       hasAnswered = true;
       disableOptions(button);
-      statusEl.textContent = 'Ответ отправлен. Ожидаем других игроков…';
+      setStatusText('Ответ отправлен. Ожидаем других игроков…', 'answer');
     };
 
     const disableOptions = (selectedButton) => {
@@ -725,6 +728,7 @@
       hideAutoStartCountdown({ resetStatus: false });
       questionSection.hidden = true;
       resultSection.hidden = false;
+      setStatusText('Результаты вопроса.', 'results');
 
       const result = (payload.results || []).find((r) => r.player === playerName);
       if (result?.is_correct)
@@ -741,6 +745,7 @@
       hideAutoStartCountdown({ resetStatus: false });
       questionSection.hidden = true;
       resultSection.hidden = false;
+      setStatusText('Викторина завершена. Смотрите итоговый счёт.', 'final');
       answerSummary.textContent = 'Игра завершена! Итоговый счёт:';
       renderScoreboard(payload.scoreboard || []);
     };
