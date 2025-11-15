@@ -82,9 +82,9 @@ async def create_room(
     asyncio.create_task(_preload_room_questions(room_id, quiz_id))
 
     start_mode_normalized = (start_mode or "manual").strip().lower()
+    delay_seconds: int | None = None
     start_at: datetime | None = None
     if start_mode_normalized in {"auto", "scheduled"}:
-        delay_seconds: int | None = None
         if auto_start_delay not in {None, ""}:
             try:
                 delay_seconds = int(auto_start_delay)  # type: ignore[arg-type]
@@ -100,9 +100,11 @@ async def create_room(
                 "Negative auto start delay ignored",
                 extra={"room_id": room_id, "delay": delay_seconds},
             )
+            delay_seconds = None
         else:
             start_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
 
+    auto_start_context: dict[str, Any] | None = None
     if start_at is not None:
         try:
             await room_manager.schedule_auto_start(
@@ -113,6 +115,14 @@ async def create_room(
                 "Failed to schedule auto start",
                 extra={"room_id": room_id, "start_at": start_at.isoformat()},
             )
+        else:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            auto_start_context = {
+                "scheduled_at": start_at.isoformat(),
+                "delay": delay_seconds or 0,
+                "origin": "create_room",
+                "server_time": now_iso,
+            }
 
     join_url = _build_join_url(room_id)
     context: dict[str, Any] = {
@@ -121,6 +131,8 @@ async def create_room(
         "join_url": join_url,
         "quiz": quiz,
     }
+    if auto_start_context is not None:
+        context["auto_start"] = auto_start_context
     return templates.TemplateResponse("screen/room.html", context)
 
 

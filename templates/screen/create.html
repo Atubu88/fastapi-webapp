@@ -13,10 +13,74 @@
       <option value="{{ quiz.id }}">{{ quiz.title }}</option>
       {% endfor %}
     </select>
+
+    <fieldset class="create-room-form__fieldset">
+      <legend>Режим запуска</legend>
+      <label class="create-room-form__option">
+        <input
+          type="radio"
+          name="start_mode"
+          value="manual"
+          checked
+        />
+        Запустить вручную
+      </label>
+      <label class="create-room-form__option">
+        <input type="radio" name="start_mode" value="auto" />
+        Автозапуск по таймеру
+      </label>
+    </fieldset>
+
+    <div class="create-room-form__auto" data-element="auto-start-options" hidden>
+      <label for="auto_start_delay">Задержка автозапуска (секунды)</label>
+      <input
+        type="number"
+        id="auto_start_delay"
+        name="auto_start_delay"
+        min="0"
+        step="1"
+        inputmode="numeric"
+        value="30"
+      />
+      <p class="create-room-form__hint" data-element="auto-start-hint">
+        Игра запустится автоматически по истечении таймера. Можно начать раньше
+        вручную кнопкой ниже.
+      </p>
+    </div>
+
     <button type="submit" class="btn">Создать комнату</button>
   </form>
   {% else %}
   <p class="error">Нет доступных викторин. Добавьте викторины в базе данных и попробуйте снова.</p>
   {% endif %}
 </section>
+
+<script>
+  (() => {
+    const form = document.querySelector(".create-room-form");
+    if (!form) {
+      return;
+    }
+
+    const autoOptions = form.querySelector('[data-element="auto-start-options"]');
+    const delayInput = form.querySelector('#auto_start_delay');
+
+    const toggleAutoOptions = () => {
+      const checked = form.querySelector('input[name="start_mode"]:checked');
+      const isAuto = checked?.value === "auto";
+      if (autoOptions) {
+        autoOptions.hidden = !isAuto;
+      }
+      if (delayInput) {
+        delayInput.toggleAttribute("required", Boolean(isAuto));
+      }
+    };
+
+    form.querySelectorAll('input[name="start_mode"]').forEach((input) => {
+      input.addEventListener("change", toggleAutoOptions);
+    });
+
+    toggleAutoOptions();
+  })();
+</script>
 {% endblock %}
