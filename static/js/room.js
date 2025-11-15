@@ -18,6 +18,22 @@
     autoStartServerTime: container.dataset.autoStartServerTime || "",
   };
 
+  function hideGlobalAutoStartBlock() {
+    const root = document.querySelector('[data-section="auto-start"]');
+    if (!root) return;
+
+    root.hidden = true;
+    root.setAttribute("hidden", "");
+
+    root
+      .querySelectorAll(
+        '[data-element="auto-start-message"], [data-element="auto-start-countdown"], [data-action="cancel-auto-start"]'
+      )
+      .forEach((el) => {
+        el.hidden = true;
+      });
+  }
+
   const templateCache = new Map();
   let currentState = null;
   let socket = null;
@@ -1013,6 +1029,7 @@
             renderPlayers(payload?.players || []);
             break;
           case "show_question":
+            hideGlobalAutoStartBlock();
             if ((payload?.question_number ?? 0) <= 1) {
               resetResponseStats();
             }
@@ -1021,9 +1038,11 @@
             safeEnsureState("question", payload || {});
             break;
           case "show_results":
+            hideGlobalAutoStartBlock();
             safeEnsureState("question", prepareResultsPayload(payload || {}));
             break;
           case "show_final":
+            hideGlobalAutoStartBlock();
             gameInProgress = false;
             lastQuestionContext = null;
             resetAutoStartState();
@@ -1036,6 +1055,7 @@
             setAutoStartCancelled(payload || {});
             break;
           case "auto_start_triggered":
+            hideGlobalAutoStartBlock();
             setAutoStartTriggered(payload || {});
             break;
           case "error":
