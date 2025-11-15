@@ -116,13 +116,7 @@ async def create_room(
                 extra={"room_id": room_id, "start_at": start_at.isoformat()},
             )
         else:
-            now_iso = datetime.now(timezone.utc).isoformat()
-            auto_start_context = {
-                "scheduled_at": start_at.isoformat(),
-                "delay": delay_seconds or 0,
-                "origin": "create_room",
-                "server_time": now_iso,
-            }
+            auto_start_context = _build_auto_start_context(room)
 
     join_url = _build_join_url(room_id)
     context: dict[str, Any] = {
@@ -172,6 +166,23 @@ async def _resolve_quiz_title(room: Room | None) -> str | None:
     return quiz_title
 
 
+def _build_auto_start_context(room: Room) -> dict[str, Any] | None:
+    scheduled_at = room.auto_start_at
+    if scheduled_at is None:
+        return None
+
+    scheduled_at = scheduled_at.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    delay_seconds = max(0.0, (scheduled_at - now).total_seconds())
+
+    return {
+        "scheduled_at": scheduled_at.isoformat(),
+        "delay": delay_seconds,
+        "origin": room.auto_start_origin,
+        "server_time": now.isoformat(),
+    }
+
+
 @router.get("/join", response_class=HTMLResponse, name="screen:join")
 async def join_room_get(request: Request, code: str) -> HTMLResponse:
     room = room_manager.get_room(code)
@@ -202,6 +213,7 @@ async def join_room_post(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     quiz_title = await _resolve_quiz_title(room)
+    auto_start_context = _build_auto_start_context(room)
 
     return templates.TemplateResponse(
         "screen/join.html",
@@ -210,6 +222,7 @@ async def join_room_post(
             "room_id": room.room_id,
             "player_name": player.name,
             "quiz_title": quiz_title,
+            "auto_start": auto_start_context,
         },
     )
 
