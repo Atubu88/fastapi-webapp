@@ -379,6 +379,7 @@
         autoHide = false,
         onTick,
         onClear,
+        onComplete,
       } = {}
     ) => {
       let target = element ?? null;
@@ -423,11 +424,12 @@
         }
 
         if (remaining <= 0) {
-          cancelInterval();
+          controller.clear();
+          if (typeof onComplete === 'function') onComplete();
         }
       };
 
-      return {
+      const controller = {
         start(startIso, durationSeconds) {
           if (!target) return;
           const start = Date.parse(startIso);
@@ -454,6 +456,8 @@
           setHidden(true);
         },
       };
+
+      return controller;
     };
 
     const questionTimerController = createTimerController(questionTimer, {
@@ -465,6 +469,12 @@
       onTick: (formatted) => {
         if (statusEl) {
           statusEl.textContent = `Игра начнётся через ${formatted} (автостарт)`;
+        }
+      },
+      onComplete: () => {
+        hideAutoStartCountdown({ resetStatus: false });
+        if (statusEl) {
+          statusEl.textContent = 'Игра запускается автоматически…';
         }
       },
     });
